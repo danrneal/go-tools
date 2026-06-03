@@ -1,0 +1,368 @@
+---
+version: "2"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+    - golines
+
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/danrneal/gtd.nvim
+
+    golines:
+      max-len: 120
+
+linters:
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - depguard
+    - dogsled
+    - durationcheck
+    - dupl
+    - dupword
+    - embeddedstructfieldcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exptostd
+    - fatcontext
+    - forbidigo
+    - funcorder
+    - funlen
+    - gocheckcompilerdirectives
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocritic
+    - godoclint
+    - godot
+    - gomoddirectives
+    - goprintffuncname
+    - gosec
+    - gosmopolitan
+    - govet
+    - iface
+    - inamedparam
+    - ineffassign
+    - interfacebloat
+    - intrange
+    - iotamixing
+    - ireturn
+    - lll
+    - loggercheck
+    - makezero
+    - mirror
+    - misspell
+    - mnd
+    - modernize
+    - musttag
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - noctx
+    - nolintlint
+    - nosprintfhostport
+    - paralleltest
+    - perfsprint
+    - prealloc
+    - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - recvcheck
+    - revive
+    - rowserrcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    - staticcheck
+    - tagalign
+    - tagliatelle
+    - testableexamples
+    - tparallel
+    - unconvert
+    - unparam
+    - unqueryvet
+    - unused
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+    - wrapcheck
+    - zerologlint
+    - wsl_v5
+
+  settings:
+    cyclop:
+      max-complexity: 30
+      package-average: 10.0
+
+    depguard:
+      rules:
+        "assertion libraries":
+          files:
+            - "$all"
+          deny:
+            - pkg: github.com/onsi/ginkgo
+              desc: Use standard library testing package instead
+            - pkg: github.com/onsi/gomega
+              desc: Use standard library testing package and go-cmp instead
+            - pkg: github.com/stretchr/testify
+              desc: Use standard library testing package and go-cmp instead, do not use assertion libraries
+        "deprecated":
+          files:
+            - "$all"
+          deny:
+            - pkg: github.com/gofrs/uuid$
+              desc: Use github.com/gofrs/uuid/v5 or later, it was not a go module before v5
+            - pkg: github.com/golang/protobuf
+              desc: Use google.golang.org/protobuf instead, see https://developers.google.com/protocol-buffers/docs/reference/go/faq#modules
+            - pkg: github.com/pkg/errors
+              desc: Use standard library errors and fmt.Errorf("%w") instead
+            - pkg: github.com/satori/go.uuid
+              desc: Use github.com/google/uuid instead, satori's package is not maintained
+            - pkg: golang.org/x/net/context
+              desc: Use standard library context package instead
+            - pkg: io/ioutil
+              desc: Use the io or os packages instead (deprecated since Go 1.16)
+        "non-main files":
+          files:
+            - "!**/main.go"
+          deny:
+            - pkg: log$
+              desc: Use log/slog instead, see https://go.dev/blog/slog
+        "non-test files":
+          files:
+            - "!$test"
+          deny:
+            - pkg: math/rand$
+              desc: Use math/rand/v2 instead, see https://go.dev/blog/randv2
+
+    dupword:
+      keywords:
+        - "the"
+        - "and"
+        - "a"
+
+    embeddedstructfieldcheck:
+      forbid-mutex: true
+
+    errcheck:
+      check-type-assertions: true
+      exclude-functions:
+        - (*database/sql.Tx).Rollback
+
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    funlen:
+      lines: 100
+      statements: 50
+
+    funcorder:
+      struct-method: false
+      function: true
+
+    gocognit:
+      min-complexity: 20
+
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        # Reconsider after https://github.com/go-critic/go-critic/issues/1526 is resolved.
+        - unnamedResult
+      settings:
+        captLocal:
+          paramsOnly: false
+        elseif:
+          skipBalanced: false
+        rangeExprCopy:
+          skipTestFuncs: false
+        rangeValCopy:
+          skipTestFuncs: false
+        truncateCmp:
+          skipArchDependent: false
+        underef:
+          skipRecvDeref: false
+
+    godoclint:
+      enable:
+        - no-unused-link
+        - require-stdlib-doclink
+
+    gosec:
+      excludes:
+        - G117
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+
+    ireturn:
+      allow:
+        - anon
+        - empty
+        - error
+        - stdlib
+        - generic
+        - (or|er)$
+
+    lll:
+      tab-width: 4
+
+    misspell:
+      locale: US
+
+    mnd:
+      ignored-functions:
+        - args.Error
+        - bytes.SplitN
+        - flag.Arg
+        - flag.Duration.*
+        - flag.Float.*
+        - flag.Int.*
+        - flag.Uint.*
+        - os.Chmod
+        - os.Mkdir.*
+        - os.OpenFile
+        - os.WriteFile
+        - prometheus.ExponentialBuckets.*
+        - prometheus.LinearBuckets
+        - strconv.Format.*
+        - strconv.Parse.*
+        - strings.SplitN
+
+    nakedret:
+      max-func-lines: 0
+
+    nolintlint:
+      allow-no-explanation: [funlen, gocognit, golines, lll]
+      require-explanation: true
+      require-specific: true
+
+    paralleltest:
+      check-cleanup: true
+
+    perfsprint:
+      strconcat: false
+
+    reassign:
+      patterns:
+        - ".*"
+
+    revive:
+      rules:
+        - name: argument-limit
+          arguments: [5]
+        - name: call-to-gc
+        - name: comment-spacings
+        - name: confusing-naming
+        - name: confusing-results
+        - name: deep-exit
+        - name: defer
+        - name: early-return
+          arguments: ["allow-jump"]
+        - name: enforce-repeated-arg-type-style
+          arguments: ["short"]
+        - name: filename-format
+        - name: flag-parameter
+        - name: function-result-limit
+        - name: get-return
+        - name: if-return
+        - name: import-shadowing
+        - name: max-control-nesting
+        - name: modifies-value-receiver
+        - name: redundant-import-alias
+        - name: redundant-test-main-exit
+        - name: superfluous-else
+        - name: time-naming
+        - name: unconditional-recursion
+        - name: useless-break
+
+    rowserrcheck:
+      packages:
+        - github.com/jmoiron/sqlx
+
+    sloglint:
+      no-global: all
+      context: scope
+
+    staticcheck:
+      checks:
+        - all
+        - -ST1000
+
+    tagalign:
+      order:
+        - json
+        - yaml
+        - toml
+        - mapstructure
+        - binding
+        - validate
+      strict: true
+
+    usetesting:
+      os-temp-dir: true
+
+    wsl_v5:
+      allow-whole-block: true
+      cuddle-max-statements: 50
+      default: none
+      enable:
+        - after-block
+        - after-defer
+        - after-go
+        - append
+        - decl
+        - defer
+        - err
+        - expr
+        - for
+        - go
+        - label
+        - leading-whitespace
+        - range
+        - return
+        - select
+        - send
+        - switch
+        - trailing-whitespace
+        - type-switch
+
+  exclusions:
+    warn-unused: true
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      - path: '_test\.go'
+        linters:
+          - dupl
+          - funlen
+          - gocognit
+          - goconst
+          - gosec
+          - noctx
+          - wrapcheck
