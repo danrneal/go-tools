@@ -236,18 +236,25 @@ func findNewUncoveredLines(coverage Coverage, fileDiffs map[string]diffparser.Fi
 // to standard output. If regressions are found, it returns an error to indicate
 // a failed check.
 func printReport(regressions, newUncoveredLines []string) error {
+	const (
+		colorReset  = "\033[0m"
+		colorRed    = "\033[31m"
+		colorGreen  = "\033[32m"
+		colorYellow = "\033[33m"
+	)
+
 	var err error
 
 	if len(regressions) == 0 && len(newUncoveredLines) == 0 {
-		fmt.Fprintln(os.Stdout, "Coverage checks passed! No regressions or new uncovered code.")
+		fmt.Fprintf(os.Stdout, "%sCoverage checks passed! No regressions or new uncovered code.%s\n", colorGreen, colorReset)
 		return err
 	}
 
 	if len(regressions) > 0 {
-		fmt.Fprintln(os.Stdout, "Coverage Regressions Found:")
+		fmt.Fprintf(os.Stdout, "%sCoverage Regressions Found:%s\n", colorRed, colorReset)
 
 		for _, regression := range regressions {
-			fmt.Fprintf(os.Stdout, "  - %s\n", regression)
+			fmt.Fprintf(os.Stdout, "%s  - %s%s\n", colorRed, regression, colorReset)
 		}
 
 		fmt.Fprintln(os.Stdout, "")
@@ -255,10 +262,10 @@ func printReport(regressions, newUncoveredLines []string) error {
 	}
 
 	if len(newUncoveredLines) > 0 {
-		fmt.Fprintln(os.Stdout, "New Uncovered Code Found (Please Review):")
+		fmt.Fprintf(os.Stdout, "%sNew Uncovered Code Found (Please Review):%s\n", colorYellow, colorReset)
 
 		for _, newUncoveredLine := range newUncoveredLines {
-			fmt.Fprintf(os.Stdout, "  - %s\n", newUncoveredLine)
+			fmt.Fprintf(os.Stdout, "%s  - %s%s\n", colorYellow, newUncoveredLine, colorReset)
 		}
 	}
 
