@@ -179,6 +179,23 @@ linters:
       lines: 100
       statements: 50
 
+    forbidigo:
+      forbid:
+        - pattern: '^(fmt\.Print(|f|ln)|print|println)$'
+          msg: "Do not commit print statements."
+        - pattern: '^os\.IsNotExist$'
+          msg: "Use errors.Is(err, fs.ErrNotExist) instead of os.IsNotExist"
+        - pattern: '^os\.IsExist$'
+          msg: "Use errors.Is(err, fs.ErrExist) instead of os.IsExist"
+        - pattern: '^(strings|bytes)\.Title$'
+          msg: "Deprecated: use golang.org/x/text/cases instead"
+        - pattern: '^reflect\.(SliceHeader|StringHeader)$'
+          msg: "Deprecated: use unsafe.Slice or unsafe.StringData instead"
+        - pattern: '^os\.(SEEK_SET|SEEK_CUR|SEEK_END)$'
+          msg: "Deprecated: use io.SeekStart, io.SeekCurrent, or io.SeekEnd instead"
+        - pattern: '^syscall\.StringByte(Slice|Ptr)$'
+          msg: "Deprecated: use unsafe.String or unsafe.StringData instead"
+
     funcorder:
       struct-method: false
       function: true

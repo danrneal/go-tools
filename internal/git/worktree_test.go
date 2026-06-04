@@ -2,6 +2,8 @@ package git
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"testing"
@@ -41,20 +43,20 @@ func TestCreateDetachedWorktree(t *testing.T) {
 			}
 
 			if err != nil {
-				if _, statErr := os.Stat(worktree); !os.IsNotExist(statErr) {
+				if _, statErr := os.Stat(worktree); !errors.Is(statErr, fs.ErrNotExist) {
 					t.Errorf("expected worktree dir %s to be cleaned up after failure, but it exists", worktree)
 				}
 
 				return
 			}
 
-			if _, statErr := os.Stat(worktree); os.IsNotExist(statErr) {
+			if _, statErr := os.Stat(worktree); errors.Is(statErr, fs.ErrNotExist) {
 				t.Fatalf("expected worktree dir %s to be created, but it does not exist", worktree)
 			}
 
 			cleanup()
 
-			if _, statErr := os.Stat(worktree); !os.IsNotExist(statErr) {
+			if _, statErr := os.Stat(worktree); !errors.Is(statErr, fs.ErrNotExist) {
 				t.Errorf("cleanup() failed to remove directory %s", worktree)
 			}
 		})
