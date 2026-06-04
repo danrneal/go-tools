@@ -1,4 +1,4 @@
-package diffparser
+package diff
 
 import (
 	"strings"

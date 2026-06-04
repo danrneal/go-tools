@@ -11,7 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/danrneal/go-tools/internal/diffparser"
+	"github.com/danrneal/go-tools/internal/diff"
+	"github.com/danrneal/go-tools/internal/git"
 	"golang.org/x/tools/cover"
 )
 
@@ -110,29 +111,19 @@ func getModulePath(ctx context.Context) (string, error) {
 // runs the test suite within that isolated environment to generate a coverage
 // profile, and parses the resulting file before cleaning up the worktree.
 func getCoverProfile(ctx context.Context, baseCommit string) ([]*cover.Profile, error) {
-	worktree, err := os.MkdirTemp("", "cover-diff-worktree-*")
+	worktree, cleanup, err := git.CreateDetachedWorktree(ctx, ".", baseCommit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp dir for worktree: %w", err)
+		return nil, fmt.Errorf("failed to create detached worktree: %w", err)
 	}
 
-	defer os.RemoveAll(worktree)
-
-	var out []byte
-	cmd := exec.CommandContext(ctx, "git", "worktree", "add", "--detach", worktree, baseCommit)
-	if out, err = cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("failed to create git worktree: %w\nOutput: %s", err, string(out))
-	}
-
-	defer func() {
-		_ = exec.CommandContext(ctx, "git", "worktree", "remove", "--force", worktree).Run()
-	}()
+	defer cleanup()
 
 	errMsg := ""
 
 	baseCoverProfile := "base-coverage.out"
-	cmd = exec.CommandContext(ctx, "go", "test", "-coverprofile="+baseCoverProfile, "./...")
+	cmd := exec.CommandContext(ctx, "go", "test", "-coverprofile="+baseCoverProfile, "./...")
 	cmd.Dir = worktree
-	out, err = cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		errMsg = fmt.Sprintf(" (tests failed: %v)", err)
 	}
@@ -156,14 +147,14 @@ func getCoverProfile(ctx context.Context, baseCommit string) ([]*cover.Profile, 
 
 // parseGitDiff executes a strict git diff against the base commit and parses
 // the unified output into a collection of FileDiffs that map line shifts.
-func parseGitDiff(ctx context.Context, baseCommit string) (map[string]diffparser.FileDiff, error) {
+func parseGitDiff(ctx context.Context, baseCommit string) (map[string]diff.FileDiff, error) {
 	cmd := exec.CommandContext(ctx, "git", "diff", "--no-ext-diff", "-U0", baseCommit)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate git diff: %w\nOutput: %s", err, string(out))
 	}
 
-	gitDiff, err := diffparser.Parse(bytes.NewReader(out))
+	gitDiff, err := diff.Parse(bytes.NewReader(out))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse git diff: %w", err)
 	}
@@ -194,7 +185,7 @@ func calculateOverallCoverage(coverProfiles []*cover.Profile) float64 {
 // findRegressions cross-references the base coverage against the current coverage.
 // It returns a list of strings formatted as "filename:line" representing lines
 // that were covered in the base commit but are no longer covered in the current code.
-func findRegressions(baseCoverage, currentCoverage Coverage, fileDiffs map[string]diffparser.FileDiff) []string {
+func findRegressions(baseCoverage, currentCoverage Coverage, fileDiffs map[string]diff.FileDiff) []string {
 	regressions := []string{}
 	for filename, oldLines := range baseCoverage {
 		for oldLine, covered := range oldLines {
@@ -230,7 +221,7 @@ func findRegressions(baseCoverage, currentCoverage Coverage, fileDiffs map[strin
 
 // findNewUncoveredLines iterates through uncovered lines in the current workspace
 // and checks if they fall within newly inserted code blocks in the git diff.
-func findNewUncoveredLines(coverage Coverage, fileDiffs map[string]diffparser.FileDiff) []string {
+func findNewUncoveredLines(coverage Coverage, fileDiffs map[string]diff.FileDiff) []string {
 	var newUncoveredLines []string
 	for filename, lines := range coverage {
 		fileDiff, ok := fileDiffs[filename]
