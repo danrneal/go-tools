@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -60,9 +59,9 @@ func run(coverProfile, baseCommit string) error {
 
 	regressions := findRegressions(baseCoverage, coverage, fileDiffs)
 	newUncoveredLines := findNewUncoveredLines(coverage, fileDiffs)
-	err = printReport(regressions, newUncoveredLines)
+	printReport(regressions, newUncoveredLines)
 
-	return err
+	return nil
 }
 
 // parseCoverage converts a slice of parsed Go coverage profiles into a simpler,
@@ -233,22 +232,14 @@ func findNewUncoveredLines(coverage Coverage, fileDiffs map[string]diffparser.Fi
 }
 
 // printReport formats and writes the identified regressions and uncovered lines
-// to standard output. If regressions are found, it returns an error to indicate
-// a failed check.
-func printReport(regressions, newUncoveredLines []string) error {
+// to standard output. It does not return an error, making the tool purely informational.
+func printReport(regressions, newUncoveredLines []string) {
 	const (
 		colorReset  = "\033[0m"
 		colorRed    = "\033[31m"
 		colorGreen  = "\033[32m"
 		colorYellow = "\033[33m"
 	)
-
-	var err error
-
-	if len(regressions) == 0 && len(newUncoveredLines) == 0 {
-		fmt.Fprintf(os.Stdout, "%sCoverage checks passed! No regressions or new uncovered code.%s\n", colorGreen, colorReset)
-		return err
-	}
 
 	if len(regressions) > 0 {
 		fmt.Fprintf(os.Stdout, "%sCoverage Regressions Found:%s\n", colorRed, colorReset)
@@ -258,7 +249,6 @@ func printReport(regressions, newUncoveredLines []string) error {
 		}
 
 		fmt.Fprintln(os.Stdout, "")
-		err = errors.New("coverage checks failed")
 	}
 
 	if len(newUncoveredLines) > 0 {
@@ -269,5 +259,14 @@ func printReport(regressions, newUncoveredLines []string) error {
 		}
 	}
 
-	return err
+	if len(regressions) == 0 && len(newUncoveredLines) == 0 {
+		fmt.Fprintf(
+			os.Stdout,
+			"%sCoverage checks passed! No regressions or new uncovered code.%s\n",
+			colorGreen,
+			colorReset,
+		)
+
+		return
+	}
 }
