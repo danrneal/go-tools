@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -30,11 +31,11 @@ type FileDiff []Hunk
 func (fd FileDiff) ToNewLine(oldLine int) int {
 	newLine := oldLine
 	for _, hunk := range fd {
-		if (hunk.OldCount == 0 && oldLine <= hunk.OldStart) || (hunk.OldCount > 0 && oldLine < hunk.OldStart) {
+		if oldLine < hunk.OldStart || (hunk.OldCount == 0 && oldLine == hunk.OldStart) {
 			break
 		}
 
-		if hunk.OldCount > 0 && oldLine >= hunk.OldStart && oldLine < hunk.OldStart+hunk.OldCount {
+		if oldLine < hunk.OldStart+hunk.OldCount {
 			return -1
 		}
 
@@ -47,17 +48,11 @@ func (fd FileDiff) ToNewLine(oldLine int) int {
 // IsAddition returns true if the given line number falls within a newly added
 // or modified block of code in this file diff.
 func (fd FileDiff) IsAddition(line int) bool {
-	for _, hunk := range fd {
-		if line < hunk.NewStart {
-			break
-		}
+	isAddition := slices.ContainsFunc(fd, func(hunk Hunk) bool {
+		return line >= hunk.NewStart && line < hunk.NewStart+hunk.NewCount
+	})
 
-		if hunk.NewCount > 0 && line >= hunk.NewStart && line < hunk.NewStart+hunk.NewCount {
-			return true
-		}
-	}
-
-	return false
+	return isAddition
 }
 
 // Parse reads unified diff output (preferably generated with -U0 to omit context lines)
