@@ -57,9 +57,11 @@ func run(coverProfile, baseCommit string) error {
 		return err
 	}
 
+	baseOverallCoverage := calculateOverallCoverage(baseCoverProfiles)
+	overallCoverage := calculateOverallCoverage(coverProfiles)
 	regressions := findRegressions(baseCoverage, coverage, fileDiffs)
 	newUncoveredLines := findNewUncoveredLines(coverage, fileDiffs)
-	printReport(regressions, newUncoveredLines)
+	printReport(baseOverallCoverage, overallCoverage, regressions, newUncoveredLines)
 
 	return nil
 }
@@ -169,6 +171,26 @@ func parseGitDiff(ctx context.Context, baseCommit string) (map[string]diffparser
 	return gitDiff, nil
 }
 
+func calculateOverallCoverage(coverProfiles []*cover.Profile) float64 {
+	coveredStatements := 0
+	totalStatements := 0
+
+	for _, coverProfile := range coverProfiles {
+		for _, block := range coverProfile.Blocks {
+			totalStatements += block.NumStmt
+			if block.Count > 0 {
+				coveredStatements += block.NumStmt
+			}
+		}
+	}
+
+	if totalStatements == 0 {
+		return 0.0
+	}
+
+	return (float64(coveredStatements) / float64(totalStatements)) * 100.0
+}
+
 // findRegressions cross-references the base coverage against the current coverage.
 // It returns a list of strings formatted as "filename:line" representing lines
 // that were covered in the base commit but are no longer covered in the current code.
@@ -233,7 +255,7 @@ func findNewUncoveredLines(coverage Coverage, fileDiffs map[string]diffparser.Fi
 
 // printReport formats and writes the identified regressions and uncovered lines
 // to standard output. It does not return an error, making the tool purely informational.
-func printReport(regressions, newUncoveredLines []string) {
+func printReport(baseOverallCoverage, overallCoverage float64, regressions, newUncoveredLines []string) {
 	const (
 		colorReset  = "\033[0m"
 		colorRed    = "\033[31m"
@@ -266,7 +288,16 @@ func printReport(regressions, newUncoveredLines []string) {
 			colorGreen,
 			colorReset,
 		)
-
-		return
 	}
+
+	var deltaStr string
+	delta := overallCoverage - baseOverallCoverage
+	if delta >= 0 {
+		deltaStr = fmt.Sprintf("%s+%.2f%%%s", colorGreen, delta, colorReset)
+	} else {
+		deltaStr = fmt.Sprintf("%s%.2f%%%s", colorRed, delta, colorReset)
+	}
+
+	fmt.Fprintf(os.Stdout, "Base Coverage:    %.2f%%\n", baseOverallCoverage)
+	fmt.Fprintf(os.Stdout, "Current Coverage: %.2f%% (%s)\n\n", overallCoverage, deltaStr)
 }

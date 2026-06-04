@@ -235,6 +235,11 @@ linters:
       locale: US
 
     mnd:
+      ignored-numbers:
+        - '10'
+        - '100'
+        - '100.0'
+        - '1024'
       ignored-functions:
         - args.Error
         - bytes.SplitN
