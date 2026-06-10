@@ -5,13 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
-	"path/filepath"
-	"strings"
 
 	"github.com/danrneal/go-tools/internal/coverage"
 	"github.com/danrneal/go-tools/internal/git"
+	"github.com/danrneal/go-tools/internal/golang"
 	"golang.org/x/tools/cover"
 )
 
@@ -34,9 +32,14 @@ func run(coverProfile, baseCommit string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	gc, err := git.NewClient()
+	gitClient, err := git.NewClient()
 	if err != nil {
 		return fmt.Errorf("failed to create git client: %w", err)
+	}
+
+	goClient, err := golang.NewClient()
+	if err != nil {
+		return fmt.Errorf("failed to create go client: %w", err)
 	}
 
 	coverProfiles, err := cover.ParseProfiles(coverProfile)
@@ -44,20 +47,20 @@ func run(coverProfile, baseCommit string) error {
 		return fmt.Errorf("error parsing coverage profile: %w", err)
 	}
 
-	baseCoverProfiles, err := getCoverProfiles(ctx, gc, baseCommit)
+	baseCoverProfiles, err := getCoverProfiles(ctx, gitClient, baseCommit)
 	if err != nil {
 		return err
 	}
 
-	modulePath, err := getModulePath(ctx)
+	modulePath, err := goClient.ModulePath(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get module path: %w", err)
 	}
 
 	fileCoverage := coverage.Parse(coverProfiles, modulePath)
 	baseFileCoverage := coverage.Parse(baseCoverProfiles, modulePath)
 
-	fileDiffs, err := gc.Diff(ctx, baseCommit)
+	fileDiffs, err := gitClient.Diff(ctx, baseCommit)
 	if err != nil {
 		return fmt.Errorf("failed to parse git diff: %w", err)
 	}
@@ -71,52 +74,30 @@ func run(coverProfile, baseCommit string) error {
 	return nil
 }
 
-// getModulePath queries the local Go toolchain to determine the current module path.
-// This is required because go test -cover prefixes filenames with the module path,
-// whereas git diff uses relative paths.
-func getModulePath(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "go", "list", "-m")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to get module path: %w", err)
-	}
-
-	modulePath := strings.TrimSpace(string(out)) + "/"
-
-	return modulePath, nil
-}
-
 // getCoverProfile creates a temporary git worktree at the specified baseCommit,
 // runs the test suite within that isolated environment to generate a coverage
 // profile, and parses the resulting file before cleaning up the worktree.
-func getCoverProfiles(ctx context.Context, gc *git.Client, baseCommit string) ([]*cover.Profile, error) {
-	worktree, cleanup, err := gc.CreateWorktree(ctx, baseCommit)
+func getCoverProfiles(ctx context.Context, gitClient *git.Client, commit string) ([]*cover.Profile, error) {
+	worktree, cleanup, err := gitClient.CreateWorktree(ctx, commit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create worktree: %w", err)
 	}
 
 	defer cleanup()
 
-	errMsg := ""
-
-	baseCoverProfile := "base-coverage.out"
-	cmd := exec.CommandContext(ctx, "go", "test", "-coverprofile="+baseCoverProfile, "./...")
-	cmd.Dir = worktree
-	out, err := cmd.CombinedOutput()
+	goClient, err := golang.NewClient(worktree)
 	if err != nil {
-		errMsg = fmt.Sprintf(" (tests failed: %v)", err)
+		return nil, fmt.Errorf("failed to create go client in worktree: %w", err)
 	}
 
-	baseCoverProfilePath := filepath.Join(worktree, baseCoverProfile)
-	stat, err := os.Stat(baseCoverProfilePath)
-	if err != nil || stat.Size() == 0 {
-		errMsg = "failed to generate base coverage profile" + errMsg
-		return nil, fmt.Errorf("%s\nTest Output:\n%s", errMsg, string(out))
+	coverProfile, err := goClient.GenerateCoverProfile(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get coverage profile: %w", err)
 	}
 
-	coverProfiles, err := cover.ParseProfiles(baseCoverProfilePath)
+	coverProfiles, err := cover.ParseProfiles(coverProfile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse generated base profiles: %w", err)
+		return nil, fmt.Errorf("failed to parse generated profiles: %w", err)
 	}
 
 	return coverProfiles, nil

@@ -3,17 +3,10 @@ package git
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 )
-
-type runDiffMock struct {
-	wantArgs       []string
-	combinedOutput string
-	err            error
-}
 
 func TestDiff(t *testing.T) {
 	t.Parallel()
@@ -22,7 +15,7 @@ func TestDiff(t *testing.T) {
 		name          string
 		commitA       string
 		commitB       []string
-		runDiffMock   *runDiffMock
+		runMock       *runMock
 		wantFileDiffs map[string]FileDiff
 		wantErr       bool
 	}{
@@ -30,7 +23,7 @@ func TestDiff(t *testing.T) {
 			name:          "more than two commits returns error",
 			commitA:       "commit1",
 			commitB:       []string{"commit2", "commit3"},
-			runDiffMock:   nil,
+			runMock:       nil,
 			wantFileDiffs: nil,
 			wantErr:       true,
 		},
@@ -38,9 +31,9 @@ func TestDiff(t *testing.T) {
 			name:    "two commits compares range",
 			commitA: "base-commit",
 			commitB: []string{"HEAD"},
-			runDiffMock: &runDiffMock{
-				wantArgs:       []string{"diff", "-U0", "-M", "--no-ext-diff", "base-commit", "HEAD"},
-				combinedOutput: "",
+			runMock: &runMock{
+				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "base-commit", "HEAD"},
+				out:      "",
 			},
 			wantFileDiffs: map[string]FileDiff{},
 			wantErr:       false,
@@ -48,7 +41,7 @@ func TestDiff(t *testing.T) {
 		{
 			name:    "returns error if underlying git command fails",
 			commitA: "HEAD",
-			runDiffMock: &runDiffMock{
+			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
 				err:      errors.New("fatal: not a git repository"),
 			},
@@ -58,9 +51,9 @@ func TestDiff(t *testing.T) {
 		{
 			name:    "empty diff output",
 			commitA: "HEAD",
-			runDiffMock: &runDiffMock{
-				wantArgs:       []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				combinedOutput: "",
+			runMock: &runMock{
+				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
+				out:      "",
 			},
 			wantFileDiffs: map[string]FileDiff{},
 			wantErr:       false,
@@ -68,9 +61,9 @@ func TestDiff(t *testing.T) {
 		{
 			name:    "file mode change only (no hunks)",
 			commitA: "HEAD",
-			runDiffMock: &runDiffMock{
+			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				combinedOutput: `
+				out: `
 					diff --git a/script.sh b/script.sh
 					old mode 100644
 					new mode 100755
@@ -82,9 +75,9 @@ func TestDiff(t *testing.T) {
 		{
 			name:    "pure file rename (no hunks)",
 			commitA: "HEAD",
-			runDiffMock: &runDiffMock{
+			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				combinedOutput: `
+				out: `
 					diff --git a/file.go b/newfile.go
 					similarity index 100%
 					rename from file.go
@@ -117,9 +110,9 @@ func TestDiff(t *testing.T) {
 		{
 			name:    "single file with one hunk (omitted counts default to 1)",
 			commitA: "HEAD",
-			runDiffMock: &runDiffMock{
+			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				combinedOutput: `
+				out: `
 					diff --git a/main.go b/main.go
 					index 8a1218a..87c9307 100644
 					--- a/main.go
@@ -148,9 +141,9 @@ func TestDiff(t *testing.T) {
 		{
 			name:    "omitted new count only",
 			commitA: "HEAD",
-			runDiffMock: &runDiffMock{
+			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				combinedOutput: `
+				out: `
 					diff --git a/main.go b/main.go
 					index 8a1218a..87c9307 100644
 					--- a/main.go
@@ -177,9 +170,9 @@ func TestDiff(t *testing.T) {
 		{
 			name:    "omitted old count only",
 			commitA: "HEAD",
-			runDiffMock: &runDiffMock{
+			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				combinedOutput: `
+				out: `
 					diff --git a/main.go b/main.go
 					index 8a1218a..87c9307 100644
 					--- a/main.go
@@ -211,24 +204,7 @@ func TestDiff(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			run := func(ctx context.Context, args ...string) ([]byte, error) {
-				if diff := cmp.Diff(tt.runDiffMock.wantArgs, args); diff != "" {
-					t.Errorf("Diff() args mismatch (-want +got):\n%s", diff)
-				}
-
-				if tt.runDiffMock.err != nil {
-					return nil, tt.runDiffMock.err
-				}
-
-				combinedOutput := []byte(trimIndent(tt.runDiffMock.combinedOutput))
-
-				return combinedOutput, nil
-			}
-
-			client := &Client{
-				run: run,
-			}
-
+			client := newMockClient(t, tt.runMock)
 			gotFileDiffs, err := client.Diff(context.Background(), tt.commitA, tt.commitB...)
 
 			if (err != nil) != tt.wantErr {
@@ -409,13 +385,4 @@ func TestIsAddition(t *testing.T) {
 			}
 		})
 	}
-}
-
-func trimIndent(s string) string {
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lines[i] = strings.TrimLeft(line, "\t ")
-	}
-
-	return strings.Join(lines, "\n")
 }

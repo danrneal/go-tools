@@ -88,6 +88,28 @@ func TestParse(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "module path without trailing slash is handled correctly",
+			coverProfiles: []*cover.Profile{
+				{
+					FileName: "github.com/example/repo/main.go",
+					Mode:     "set",
+					Blocks: []cover.ProfileBlock{
+						{
+							StartLine: 1,
+							EndLine:   1,
+							Count:     1,
+						},
+					},
+				},
+			},
+			modulePath: "github.com/example/repo",
+			wantFiles: Files{
+				"main.go": {
+					1: true,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

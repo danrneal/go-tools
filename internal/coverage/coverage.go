@@ -18,8 +18,11 @@ type Files map[string]map[int]bool
 // Parse converts a slice of parsed Go coverage profiles into a simpler,
 // faster-to-query coverage map, dynamically stripping the module prefix from filenames.
 func Parse(coverProfiles []*cover.Profile, modulePath string) Files {
-	coverage := Files{}
+	if !strings.HasSuffix(modulePath, "/") {
+		modulePath += "/"
+	}
 
+	coverage := Files{}
 	for _, coverProfile := range coverProfiles {
 		filename := strings.TrimPrefix(coverProfile.FileName, modulePath)
 		if _, ok := coverage[filename]; !ok {

@@ -1,9 +1,11 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 )
@@ -43,6 +45,13 @@ func NewClient(dir ...string) (*Client, error) {
 	}
 
 	return client, nil
+}
+
+func (c *Client) Show(ctx context.Context, commit, filename string) (io.Reader, error) {
+	out, err := c.run(ctx, "show", fmt.Sprintf("%s:%s", commit, filename))
+	reader := bytes.NewReader(out)
+
+	return reader, err
 }
 
 // Head executes `git rev-parse HEAD` and returns the full commit hash
