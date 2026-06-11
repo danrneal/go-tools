@@ -1,8 +1,8 @@
-.PHONY: all fast update lint test build coverage mutation_tests
+.PHONY: all fast update lint test build coverage gremlins go-mutesting clean
 
-all: update lint test build coverage mutation_tests
+all: update lint test build coverage gremlins go-mutesting clean
 
-fast: lint test build coverage
+fast: lint test build coverage clean
 
 update:
 	@echo "==> Updating tooling configurations from danrneal/go-tools..."
@@ -10,6 +10,7 @@ update:
 	curl -sSfL https://raw.githubusercontent.com/danrneal/go-tools/main/Makefile -o Makefile
 	@echo "==> Installing latest CLI tools..."
 	go install github.com/danrneal/go-tools/cmd/cover-diff@latest
+	go install github.com/danrneal/go-tools/cmd/go-mutesting-ignore@latest
 
 lint:
 	@echo "==> Running golangci-lint..."
@@ -29,16 +30,17 @@ coverage: test
 	go tool cover -html=coverage.out -o ~/Downloads/coverage.html
 	@echo "==> Checking coverage diff..."
 	$(shell go env GOPATH)/bin/cover-diff -coverprofile=coverage.out
-	@echo "==> Cleaning up coverage.out..."
-	rm -f coverage.out
 
-mutation_tests: build
+gremlins: build
 	@echo "==> Running gremlins..."
-	$(shell go env GOPATH)/bin/gremlins unleash --timeout-coefficient 25 --invert-assignments --invert-bitwise --invert-bwassign --invert-negatives --invert-logical --invert-loopctrl --remove-self-assignments -S lv; GREMLINS_CODE=$$?; \
-	echo "==> Running go-mutesting (filtered)..."; \
-	go run tools/mutant_filter/main.go -base main -target ./... -out ~/Downloads/filtered-report.html; \
-	echo "==> Checking mutation results..."; \
-	if [ $$GREMLINS_CODE -ne 0 ]; then \
-		echo "FAILURE: gremlins found surviving mutants. See output above."; \
-		exit 1; \
-	fi
+	$(shell go env GOPATH)/bin/gremlins unleash --timeout-coefficient 25 --invert-assignments --invert-bitwise --invert-bwassign --invert-negatives --invert-logical --invert-loopctrl --remove-self-assignments -S lv
+
+go-mutesting: test build
+	@echo "==> Running go-mutesting (filtered)..."
+	$(shell go env GOPATH)/bin/go-mutesting-ignore -coverprofile=coverage.out
+	@echo "==> Moving report to Downloads..."
+	mv go-mutesting-report.html ~/Downloads/go-mutesting-report.html
+
+clean:
+	@echo "==> Cleaning up artifacts..."
+	rm -f coverage.out
