@@ -91,10 +91,10 @@ func TestDiff(t *testing.T) {
 			},
 			wantFileDiffs: map[string]FileDiff{
 				"file.go": {
-					NewFilepath: "newfile.go",
+					NewRelPath: "newfile.go",
 				},
 				"other.go": {
-					NewFilepath: "other.go",
+					NewRelPath: "other.go",
 					Hunks: []Hunk{
 						{
 							OldStart: 1,
@@ -125,7 +125,7 @@ func TestDiff(t *testing.T) {
 			},
 			wantFileDiffs: map[string]FileDiff{
 				"main.go": {
-					NewFilepath: "main.go",
+					NewRelPath: "main.go",
 					Hunks: []Hunk{
 						{
 							OldStart: 10,
@@ -154,7 +154,7 @@ func TestDiff(t *testing.T) {
 			},
 			wantFileDiffs: map[string]FileDiff{
 				"main.go": {
-					NewFilepath: "main.go",
+					NewRelPath: "main.go",
 					Hunks: []Hunk{
 						{
 							OldStart: 10,
@@ -185,7 +185,7 @@ func TestDiff(t *testing.T) {
 			},
 			wantFileDiffs: map[string]FileDiff{
 				"main.go": {
-					NewFilepath: "main.go",
+					NewRelPath: "main.go",
 					Hunks: []Hunk{
 						{
 							OldStart: 10,

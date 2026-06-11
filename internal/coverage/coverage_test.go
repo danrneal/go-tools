@@ -218,7 +218,7 @@ func TestFindRegressions(t *testing.T) {
 		baseCoverage    Files
 		currentCoverage Files
 		fileDiffs       map[string]git.FileDiff
-		want            []string
+		want            map[string][]int
 	}{
 		{
 			name:         "empty baseCoverage returns empty slice",
@@ -229,7 +229,7 @@ func TestFindRegressions(t *testing.T) {
 				},
 			},
 			fileDiffs: map[string]git.FileDiff{},
-			want:      []string{},
+			want:      map[string][]int{},
 		},
 		{
 			name: "baseCoverage file with no lines returns empty slice",
@@ -242,7 +242,7 @@ func TestFindRegressions(t *testing.T) {
 				},
 			},
 			fileDiffs: map[string]git.FileDiff{},
-			want:      []string{},
+			want:      map[string][]int{},
 		},
 		{
 			name: "covered base line becomes uncovered (regression found)",
@@ -257,8 +257,8 @@ func TestFindRegressions(t *testing.T) {
 				},
 			},
 			fileDiffs: map[string]git.FileDiff{},
-			want: []string{
-				"main.go:10",
+			want: map[string][]int{
+				"main.go": {10},
 			},
 		},
 		{
@@ -276,25 +276,25 @@ func TestFindRegressions(t *testing.T) {
 				},
 			},
 			fileDiffs: map[string]git.FileDiff{},
-			want: []string{
-				"main.go:20",
+			want: map[string][]int{
+				"main.go": {20},
 			},
 		},
 		{
-			name: "covered base line shifts and becomes uncovered (regression found at new line)",
+			name: "covered base line shifts and file renamed (regression found at new line)",
 			baseCoverage: Files{
 				"main.go": {
 					10: true,
 				},
 			},
 			currentCoverage: Files{
-				"main.go": {
+				"new_main.go": {
 					12: false,
 				},
 			},
 			fileDiffs: map[string]git.FileDiff{
 				"main.go": {
-					NewFilepath: "main.go",
+					NewRelPath: "new_main.go",
 					Hunks: []git.Hunk{
 						{
 							OldStart: 5,
@@ -305,8 +305,8 @@ func TestFindRegressions(t *testing.T) {
 					},
 				},
 			},
-			want: []string{
-				"main.go:12",
+			want: map[string][]int{
+				"new_main.go": {12},
 			},
 		},
 		{
@@ -325,8 +325,8 @@ func TestFindRegressions(t *testing.T) {
 				},
 			},
 			fileDiffs: map[string]git.FileDiff{},
-			want: []string{
-				"z_regression.go:10",
+			want: map[string][]int{
+				"z_regression.go": {10},
 			},
 		},
 		{
@@ -344,8 +344,8 @@ func TestFindRegressions(t *testing.T) {
 				},
 			},
 			fileDiffs: map[string]git.FileDiff{},
-			want: []string{
-				"main.go:20",
+			want: map[string][]int{
+				"main.go": {20},
 			},
 		},
 		{
@@ -361,7 +361,7 @@ func TestFindRegressions(t *testing.T) {
 				},
 			},
 			fileDiffs: map[string]git.FileDiff{},
-			want:      []string{},
+			want:      map[string][]int{},
 		},
 	}
 
@@ -382,49 +382,57 @@ func TestFindNewUncoveredLines(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		coverage  Files
-		fileDiffs map[string]git.FileDiff
-		want      []string
+		name            string
+		baseCoverage    Files
+		currentCoverage Files
+		fileDiffs       map[string]git.FileDiff
+		want            map[string][]int
 	}{
 		{
-			name:     "empty coverage returns empty slice",
-			coverage: Files{},
-			fileDiffs: map[string]git.FileDiff{
-				"main.go": {},
-			},
-			want: []string{},
+			name:            "empty coverage returns empty slice",
+			baseCoverage:    Files{},
+			currentCoverage: Files{},
+			fileDiffs:       map[string]git.FileDiff{},
+			want:            map[string][]int{},
 		},
 		{
-			name: "non-empty coverage with no lines returns empty slice",
-			coverage: Files{
+			name:         "non-empty coverage with no lines returns empty slice",
+			baseCoverage: Files{},
+			currentCoverage: Files{
 				"main.go": {},
 			},
-			fileDiffs: map[string]git.FileDiff{
-				"main.go": {
-					NewFilepath: "main.go",
-					Hunks: []git.Hunk{
-						{
-							OldStart: 1,
-							OldCount: 0,
-							NewStart: 1,
-							NewCount: 2,
-						},
-					},
-				},
-			},
-			want: []string{},
+			fileDiffs: map[string]git.FileDiff{},
+			want:      map[string][]int{},
 		},
 		{
-			name: "uncovered line outside of new hunks is ignored",
-			coverage: Files{
+			name:         "untracked file missing from diff is reported as new",
+			baseCoverage: Files{},
+			currentCoverage: Files{
 				"main.go": {
 					10: false,
 				},
 			},
+			fileDiffs: map[string]git.FileDiff{},
+			want: map[string][]int{
+				"main.go": {10},
+			},
+		},
+		{
+			name: "uncovered line outside of new hunks is ignored",
+			baseCoverage: Files{
+				"main.go": {
+					10: false,
+				},
+			},
+			currentCoverage: Files{
+				"main.go": {
+					10: false,
+					22: false,
+				},
+			},
 			fileDiffs: map[string]git.FileDiff{
 				"main.go": {
-					NewFilepath: "main.go",
+					NewRelPath: "main.go",
 					Hunks: []git.Hunk{
 						{
 							OldStart: 20,
@@ -435,35 +443,18 @@ func TestFindNewUncoveredLines(t *testing.T) {
 					},
 				},
 			},
-			want: []string{},
-		},
-		{
-			name: "new uncovered code is found and reported",
-			coverage: Files{
-				"main.go": {
-					10: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{
-				"main.go": {
-					NewFilepath: "main.go",
-					Hunks: []git.Hunk{
-						{
-							OldStart: 10,
-							OldCount: 0,
-							NewStart: 10,
-							NewCount: 2,
-						},
-					},
-				},
-			},
-			want: []string{
-				"main.go:10",
+			want: map[string][]int{
+				"main.go": {22},
 			},
 		},
 		{
 			name: "covered line inside new hunk is safely ignored",
-			coverage: Files{
+			baseCoverage: Files{
+				"main.go": {
+					5: true,
+				},
+			},
+			currentCoverage: Files{
 				"main.go": {
 					10: true,
 					20: false,
@@ -471,7 +462,7 @@ func TestFindNewUncoveredLines(t *testing.T) {
 			},
 			fileDiffs: map[string]git.FileDiff{
 				"main.go": {
-					NewFilepath: "main.go",
+					NewRelPath: "main.go",
 					Hunks: []git.Hunk{
 						{
 							OldStart: 10,
@@ -482,23 +473,28 @@ func TestFindNewUncoveredLines(t *testing.T) {
 					},
 				},
 			},
-			want: []string{
-				"main.go:20",
+			want: map[string][]int{
+				"main.go": {20},
 			},
 		},
 		{
-			name: "file missing from diff is safely ignored",
-			coverage: Files{
-				"a_missing.go": {
+			name: "unmodified file with uncovered lines is safely ignored alongside new code",
+			baseCoverage: Files{
+				"a_unmodified.go": {
 					10: false,
 				},
-				"z_uncovered.go": {
+			},
+			currentCoverage: Files{
+				"a_unmodified.go": {
+					10: false,
+				},
+				"z_new.go": {
 					10: false,
 				},
 			},
 			fileDiffs: map[string]git.FileDiff{
-				"z_uncovered.go": {
-					NewFilepath: "z_uncovered.go",
+				"z_new.go": {
+					NewRelPath: "z_new.go",
 					Hunks: []git.Hunk{
 						{
 							OldStart: 10,
@@ -509,8 +505,8 @@ func TestFindNewUncoveredLines(t *testing.T) {
 					},
 				},
 			},
-			want: []string{
-				"z_uncovered.go:10",
+			want: map[string][]int{
+				"z_new.go": {10},
 			},
 		},
 	}
@@ -519,7 +515,7 @@ func TestFindNewUncoveredLines(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := FindNewUncoveredLines(tt.coverage, tt.fileDiffs)
+			got := FindNewUncoveredLines(tt.baseCoverage, tt.currentCoverage, tt.fileDiffs)
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("FindNewUncoveredLines() mismatch (-want +got):\n%s", diff)

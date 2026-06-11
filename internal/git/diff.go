@@ -19,8 +19,8 @@ var hunkRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`
 // FileDiff contains all the modifications made to a single file, including
 // potential renames and a list of line-shifting hunks.
 type FileDiff struct {
-	NewFilepath string
-	Hunks       []Hunk
+	NewRelPath string
+	Hunks      []Hunk
 }
 
 // Hunk represents a single chunk of changes in a file as reported by a git diff.
@@ -50,35 +50,35 @@ func (c *Client) Diff(ctx context.Context, commitA string, commitB ...string) (m
 
 	reader := bytes.NewReader(diff)
 
-	var oldFilepath, newFilepath string
+	var oldRelPath, newRelPath string
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
 
 		if suffix, ok := strings.CutPrefix(line, "rename from "); ok {
-			oldFilepath = suffix
+			oldRelPath = suffix
 			continue
 		}
 
 		if suffix, ok := strings.CutPrefix(line, "rename to "); ok {
-			newFilepath = suffix
-			fileDiffs[oldFilepath] = FileDiff{
-				NewFilepath: newFilepath,
+			newRelPath = suffix
+			fileDiffs[oldRelPath] = FileDiff{
+				NewRelPath: newRelPath,
 			}
 
 			continue
 		}
 
 		if suffix, ok := strings.CutPrefix(line, "--- a/"); ok {
-			oldFilepath = suffix
+			oldRelPath = suffix
 			continue
 		}
 
 		if suffix, ok := strings.CutPrefix(line, "+++ b/"); ok {
-			newFilepath = suffix
-			if _, ok := fileDiffs[oldFilepath]; !ok {
-				fileDiffs[oldFilepath] = FileDiff{
-					NewFilepath: newFilepath,
+			newRelPath = suffix
+			if _, ok := fileDiffs[oldRelPath]; !ok {
+				fileDiffs[oldRelPath] = FileDiff{
+					NewRelPath: newRelPath,
 				}
 			}
 
@@ -91,9 +91,9 @@ func (c *Client) Diff(ctx context.Context, commitA string, commitB ...string) (m
 		}
 
 		hunk := parseHunk(matches)
-		fileDiff := fileDiffs[oldFilepath]
+		fileDiff := fileDiffs[oldRelPath]
 		fileDiff.Hunks = append(fileDiff.Hunks, hunk)
-		fileDiffs[oldFilepath] = fileDiff
+		fileDiffs[oldRelPath] = fileDiff
 	}
 
 	if err := scanner.Err(); err != nil {

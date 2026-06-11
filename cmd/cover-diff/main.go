@@ -4,8 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"os/signal"
+	"slices"
 
 	"github.com/danrneal/go-tools/internal/coverage"
 	"github.com/danrneal/go-tools/internal/git"
@@ -68,13 +70,13 @@ func run(coverProfile, baseCommit string) error {
 	baseOverallPercentage := coverage.OverallPercentage(baseCoverProfiles)
 	overallPercentage := coverage.OverallPercentage(coverProfiles)
 	regressions := coverage.FindRegressions(baseFileCoverage, fileCoverage, fileDiffs)
-	newUncoveredLines := coverage.FindNewUncoveredLines(fileCoverage, fileDiffs)
+	newUncoveredLines := coverage.FindNewUncoveredLines(baseFileCoverage, fileCoverage, fileDiffs)
 	printReport(baseOverallPercentage, overallPercentage, regressions, newUncoveredLines)
 
 	return nil
 }
 
-// getCoverProfile creates a temporary git worktree at the specified baseCommit,
+// getCoverProfiles creates a temporary git worktree at the specified baseCommit,
 // runs the test suite within that isolated environment to generate a coverage
 // profile, and parses the resulting file before cleaning up the worktree.
 func getCoverProfiles(ctx context.Context, gitClient *git.Client, commit string) ([]*cover.Profile, error) {
@@ -105,7 +107,7 @@ func getCoverProfiles(ctx context.Context, gitClient *git.Client, commit string)
 
 // printReport formats and writes the identified regressions and uncovered lines
 // to standard output. It does not return an error, making the tool purely informational.
-func printReport(baseOverallCoverage, overallCoverage float64, regressions, newUncoveredLines []string) {
+func printReport(baseOverallCoverage, overallCoverage float64, regressions, newUncoveredLines map[string][]int) {
 	const (
 		colorReset  = "\033[0m"
 		colorRed    = "\033[31m"
@@ -116,8 +118,11 @@ func printReport(baseOverallCoverage, overallCoverage float64, regressions, newU
 	if len(regressions) > 0 {
 		fmt.Fprintf(os.Stdout, "%sCoverage Regressions Found:%s\n", colorRed, colorReset)
 
-		for _, regression := range regressions {
-			fmt.Fprintf(os.Stdout, "%s  - %s%s\n", colorRed, regression, colorReset)
+		regressionPaths := slices.Sorted(maps.Keys(regressions))
+		for _, regressionPath := range regressionPaths {
+			for _, line := range regressions[regressionPath] {
+				fmt.Fprintf(os.Stdout, "%s  - %s:%d%s\n", colorRed, regressionPath, line, colorReset)
+			}
 		}
 
 		fmt.Fprintln(os.Stdout, "")
@@ -126,17 +131,18 @@ func printReport(baseOverallCoverage, overallCoverage float64, regressions, newU
 	if len(newUncoveredLines) > 0 {
 		fmt.Fprintf(os.Stdout, "%sNew Uncovered Code Found (Please Review):%s\n", colorYellow, colorReset)
 
-		for _, newUncoveredLine := range newUncoveredLines {
-			fmt.Fprintf(os.Stdout, "%s  - %s%s\n", colorYellow, newUncoveredLine, colorReset)
+		newUncoveredLinesPaths := slices.Sorted(maps.Keys(newUncoveredLines))
+		for _, newUncoveredLinesPath := range newUncoveredLinesPaths {
+			for _, line := range newUncoveredLines[newUncoveredLinesPath] {
+				fmt.Fprintf(os.Stdout, "%s  - %s:%d%s\n", colorYellow, newUncoveredLinesPath, line, colorReset)
+			}
 		}
 	}
 
 	if len(regressions) == 0 && len(newUncoveredLines) == 0 {
-		fmt.Fprintf(
-			os.Stdout,
+		fmt.Fprintf(os.Stdout,
 			"%sCoverage checks passed! No regressions or new uncovered code.%s\n",
-			colorGreen,
-			colorReset,
+			colorGreen, colorReset,
 		)
 	}
 

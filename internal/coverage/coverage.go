@@ -1,7 +1,6 @@
 package coverage
 
 import (
-	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -16,7 +15,7 @@ import (
 type Files map[string]map[int]bool
 
 // Parse converts a slice of parsed Go coverage profiles into a simpler,
-// faster-to-query coverage map, dynamically stripping the module prefix from filenames.
+// faster-to-query coverage map, dynamically stripping the module prefix from relative paths.
 func Parse(coverProfiles []*cover.Profile, modulePath string) Files {
 	if !strings.HasSuffix(modulePath, "/") {
 		modulePath += "/"
@@ -24,14 +23,14 @@ func Parse(coverProfiles []*cover.Profile, modulePath string) Files {
 
 	coverage := Files{}
 	for _, coverProfile := range coverProfiles {
-		filename := strings.TrimPrefix(coverProfile.FileName, modulePath)
-		if _, ok := coverage[filename]; !ok {
-			coverage[filename] = map[int]bool{}
+		relPath := strings.TrimPrefix(coverProfile.FileName, modulePath)
+		if _, ok := coverage[relPath]; !ok {
+			coverage[relPath] = map[int]bool{}
 		}
 
 		for _, block := range coverProfile.Blocks {
 			for line := block.StartLine; line <= block.EndLine; line++ {
-				coverage[filename][line] = coverage[filename][line] || block.Count > 0
+				coverage[relPath][line] = coverage[relPath][line] || block.Count > 0
 			}
 		}
 	}
@@ -61,27 +60,30 @@ func OverallPercentage(coverProfiles []*cover.Profile) float64 {
 }
 
 // FindRegressions cross-references the base coverage against the current coverage.
-// It returns a list of strings formatted as "filename:line" representing lines
+// It returns a list of strings formatted as "relPath:line" representing lines
 // that were covered in the base commit but are no longer covered in the current code.
-func FindRegressions(baseCoverage, currentCoverage Files, fileDiffs map[string]git.FileDiff) []string {
-	regressions := []string{}
+func FindRegressions(baseCoverage, currentCoverage Files, fileDiffs map[string]git.FileDiff) map[string][]int {
+	regressions := map[string][]int{}
+	for oldRelPath, oldLines := range baseCoverage {
+		newRelPath := oldRelPath
+		if fileDiff, ok := fileDiffs[oldRelPath]; ok {
+			newRelPath = fileDiff.NewRelPath
+		}
 
-	baseFiles := slices.Sorted(maps.Keys(baseCoverage))
-	for _, filename := range baseFiles {
-		newLines, ok := currentCoverage[filename]
+		newLines, ok := currentCoverage[newRelPath]
 		if !ok {
 			continue
 		}
 
-		oldLines := slices.Sorted(maps.Keys(baseCoverage[filename]))
-		for _, oldLine := range oldLines {
-			covered := baseCoverage[filename][oldLine]
+		lines := slices.Sorted(maps.Keys(oldLines))
+		for _, oldLine := range lines {
+			covered := oldLines[oldLine]
 			if !covered {
 				continue
 			}
 
 			newLine := oldLine
-			if fileDiff, ok := fileDiffs[filename]; ok {
+			if fileDiff, ok := fileDiffs[oldRelPath]; ok {
 				newLine = fileDiff.ToNewLine(oldLine)
 			}
 
@@ -89,8 +91,7 @@ func FindRegressions(baseCoverage, currentCoverage Files, fileDiffs map[string]g
 				continue
 			}
 
-			regression := fmt.Sprintf("%s:%d", filename, newLine)
-			regressions = append(regressions, regression)
+			regressions[newRelPath] = append(regressions[newRelPath], newLine)
 		}
 	}
 
@@ -99,27 +100,31 @@ func FindRegressions(baseCoverage, currentCoverage Files, fileDiffs map[string]g
 
 // FindNewUncoveredLines iterates through uncovered lines in the current workspace
 // and checks if they fall within newly inserted code blocks in the git diff.
-func FindNewUncoveredLines(coverage Files, fileDiffs map[string]git.FileDiff) []string {
-	newUncoveredLines := []string{}
+func FindNewUncoveredLines(baseCoverage, currentCoverage Files, fileDiffs map[string]git.FileDiff) map[string][]int {
+	newFileDiffs := map[string]git.FileDiff{}
+	for _, fileDiff := range fileDiffs {
+		newFileDiffs[fileDiff.NewRelPath] = fileDiff
+	}
 
-	files := slices.Sorted(maps.Keys(coverage))
-	for _, filename := range files {
-		fileDiff, ok := fileDiffs[filename]
-		if !ok {
+	newUncoveredLines := map[string][]int{}
+	for newRelPath, newLines := range currentCoverage {
+		fileDiff, ok := newFileDiffs[newRelPath]
+		if !ok && baseCoverage[newRelPath] != nil {
 			continue
 		}
 
-		lines := slices.Sorted(maps.Keys(coverage[filename]))
-		for _, line := range lines {
-			covered := coverage[filename][line]
+		lines := slices.Sorted(maps.Keys(newLines))
+		for _, newLine := range lines {
+			covered := newLines[newLine]
 			if covered {
 				continue
 			}
 
-			if fileDiff.IsAddition(line) {
-				newUncoveredLine := fmt.Sprintf("%s:%d", filename, line)
-				newUncoveredLines = append(newUncoveredLines, newUncoveredLine)
+			if ok && !fileDiff.IsAddition(newLine) {
+				continue
 			}
+
+			newUncoveredLines[newRelPath] = append(newUncoveredLines[newRelPath], newLine)
 		}
 	}
 

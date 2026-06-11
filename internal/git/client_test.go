@@ -68,17 +68,17 @@ func TestShow(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		commit   string
-		filename string
-		runMock  *runMock
-		wantOut  string
-		wantErr  bool
+		name    string
+		commit  string
+		relPath string
+		runMock *runMock
+		wantOut string
+		wantErr bool
 	}{
 		{
-			name:     "successfully executes show and returns reader",
-			commit:   "a1b2c3",
-			filename: "main.go",
+			name:    "successfully executes show and returns reader",
+			commit:  "a1b2c3",
+			relPath: "main.go",
 			runMock: &runMock{
 				wantArgs: []string{"show", "a1b2c3:main.go"},
 				out:      "file contents",
@@ -88,9 +88,9 @@ func TestShow(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:     "returns error if git command fails",
-			commit:   "HEAD",
-			filename: "missing.go",
+			name:    "returns error if git command fails",
+			commit:  "HEAD",
+			relPath: "missing.go",
 			runMock: &runMock{
 				wantArgs: []string{"show", "HEAD:missing.go"},
 				out:      "",
@@ -106,7 +106,7 @@ func TestShow(t *testing.T) {
 			t.Parallel()
 
 			client := newMockClient(t, tt.runMock)
-			reader, err := client.Show(context.Background(), tt.commit, tt.filename)
+			reader, err := client.Show(context.Background(), tt.commit, tt.relPath)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Show() error = %v, wantErr %v", err, tt.wantErr)

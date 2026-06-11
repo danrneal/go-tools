@@ -47,8 +47,9 @@ func NewClient(dir ...string) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) Show(ctx context.Context, commit, filename string) (io.Reader, error) {
-	out, err := c.run(ctx, "show", fmt.Sprintf("%s:%s", commit, filename))
+// Show executes `git show` for a specific commit and file path, returning the output as an [io.Reader].
+func (c *Client) Show(ctx context.Context, commit, relPath string) (io.Reader, error) {
+	out, err := c.run(ctx, "show", fmt.Sprintf("%s:%s", commit, relPath))
 	reader := bytes.NewReader(out)
 
 	return reader, err

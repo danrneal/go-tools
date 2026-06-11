@@ -55,8 +55,8 @@ func (c *Client) SyncDirtyFiles(ctx context.Context, worktree string) error {
 	fields := strings.Split(status, "\x00")
 	for i := 0; i < len(fields)-1; i++ {
 		field := fields[i]
-		status, filename := field[:2], field[3:]
-		filePath := filepath.Join(worktree, filename)
+		status, relPath := field[:2], field[3:]
+		filePath := filepath.Join(worktree, relPath)
 
 		switch {
 		case strings.Contains(status, "D"):
@@ -78,14 +78,29 @@ func (c *Client) SyncDirtyFiles(ctx context.Context, worktree string) error {
 				return fmt.Errorf("failed to create directory for %s: %w", filePath, err)
 			}
 
-			repoPath := filepath.Join(c.dir, filename)
-			if err := copyFile(repoPath, filePath); err != nil {
-				return fmt.Errorf("failed to copy %s: %w", repoPath, err)
+			if err := c.copyToWorktree(relPath, worktree); err != nil {
+				return err
 			}
 		}
 	}
 
 	return nil
+}
+
+// CopyFromWorktree copies a file from the provided worktree back into the client's working directory.
+func (c *Client) CopyFromWorktree(relPath, worktree string) error {
+	src := filepath.Join(worktree, relPath)
+	dst := filepath.Join(c.dir, relPath)
+
+	return copyFile(src, dst)
+}
+
+// copyToWorktree copies a file from the client's working directory into the specified worktree.
+func (c *Client) copyToWorktree(relPath, worktree string) error {
+	src := filepath.Join(c.dir, relPath)
+	dst := filepath.Join(worktree, relPath)
+
+	return copyFile(src, dst)
 }
 
 // copyFile is a helper utility that copies a file from src to dst.

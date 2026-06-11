@@ -291,3 +291,107 @@ func TestSyncDirtyFiles(t *testing.T) {
 		})
 	}
 }
+
+func TestCopyFromWorktree(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		relPath       string
+		setupRepo     map[string]string
+		setupWorktree map[string]string
+		wantRepo      map[string]string
+		wantErr       bool
+	}{
+		{
+			name:    "successful copy overwrites file in repo",
+			relPath: "main.go",
+			setupRepo: map[string]string{
+				"main.go": "old repo content",
+			},
+			setupWorktree: map[string]string{
+				"main.go": "new worktree content",
+			},
+			wantRepo: map[string]string{
+				"main.go": "new worktree content",
+			},
+			wantErr: false,
+		},
+		{
+			name:          "returns error if file is missing from worktree",
+			relPath:       "missing.go",
+			setupRepo:     map[string]string{},
+			setupWorktree: map[string]string{},
+			wantRepo:      map[string]string{},
+			wantErr:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := t.TempDir()
+			worktree := t.TempDir()
+
+			for path, content := range tt.setupRepo {
+				if err := os.MkdirAll(filepath.Join(repo, filepath.Dir(path)), 0o750); err != nil {
+					t.Fatalf("failed to create repo dir for %s: %v", path, err)
+				}
+
+				if err := os.WriteFile(filepath.Join(repo, path), []byte(content), 0o644); err != nil {
+					t.Fatalf("failed to write repo file %s: %v", path, err)
+				}
+			}
+
+			for path, content := range tt.setupWorktree {
+				if err := os.MkdirAll(filepath.Join(worktree, filepath.Dir(path)), 0o750); err != nil {
+					t.Fatalf("failed to create worktree dir for %s: %v", path, err)
+				}
+
+				if err := os.WriteFile(filepath.Join(worktree, path), []byte(content), 0o644); err != nil {
+					t.Fatalf("failed to write worktree file %s: %v", path, err)
+				}
+			}
+
+			client := &Client{
+				dir: repo,
+			}
+
+			err := client.CopyFromWorktree(tt.relPath, worktree)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("CopyFromWorktree() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			gotRepo := map[string]string{}
+			walkFn := func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+
+				if d.IsDir() {
+					return nil
+				}
+
+				content, err := os.ReadFile(filepath.Join(repo, path))
+				if err != nil {
+					return err
+				}
+
+				gotRepo[path] = string(content)
+
+				return nil
+			}
+
+			err = fs.WalkDir(os.DirFS(repo), ".", walkFn)
+			if err != nil {
+				t.Fatalf("failed to walk repo for assertions: %v", err)
+			}
+
+			if diff := cmp.Diff(tt.wantRepo, gotRepo); diff != "" {
+				t.Errorf("CopyFromWorktree() repo mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
