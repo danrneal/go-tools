@@ -12,20 +12,20 @@ func TestDiff(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		commitA       string
-		commitB       []string
-		runMock       *runMock
-		wantFileDiffs map[string]FileDiff
-		wantErr       bool
+		name     string
+		commitA  string
+		commitB  []string
+		runMock  *runMock
+		wantDiff CombinedDiff
+		wantErr  bool
 	}{
 		{
-			name:          "more than two commits returns error",
-			commitA:       "commit1",
-			commitB:       []string{"commit2", "commit3"},
-			runMock:       nil,
-			wantFileDiffs: nil,
-			wantErr:       true,
+			name:     "more than two commits returns error",
+			commitA:  "commit1",
+			commitB:  []string{"commit2", "commit3"},
+			runMock:  nil,
+			wantDiff: CombinedDiff{},
+			wantErr:  true,
 		},
 		{
 			name:    "two commits compares range",
@@ -35,8 +35,8 @@ func TestDiff(t *testing.T) {
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "base-commit", "HEAD"},
 				out:      "",
 			},
-			wantFileDiffs: map[string]FileDiff{},
-			wantErr:       false,
+			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
+			wantErr:  false,
 		},
 		{
 			name:    "returns error if underlying git command fails",
@@ -45,8 +45,8 @@ func TestDiff(t *testing.T) {
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
 				err:      errors.New("fatal: not a git repository"),
 			},
-			wantFileDiffs: nil,
-			wantErr:       true,
+			wantDiff: CombinedDiff{},
+			wantErr:  true,
 		},
 		{
 			name:    "empty diff output",
@@ -55,8 +55,8 @@ func TestDiff(t *testing.T) {
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
 				out:      "",
 			},
-			wantFileDiffs: map[string]FileDiff{},
-			wantErr:       false,
+			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
+			wantErr:  false,
 		},
 		{
 			name:    "file mode change only (no hunks)",
@@ -69,8 +69,8 @@ func TestDiff(t *testing.T) {
 					new mode 100755
 				`,
 			},
-			wantFileDiffs: map[string]FileDiff{},
-			wantErr:       false,
+			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
+			wantErr:  false,
 		},
 		{
 			name:    "pure file rename (no hunks)",
@@ -89,18 +89,40 @@ func TestDiff(t *testing.T) {
 					+foo
 				`,
 			},
-			wantFileDiffs: map[string]FileDiff{
-				"file.go": {
-					NewRelPath: "newfile.go",
+			wantDiff: CombinedDiff{
+				FromFile: map[string]*FileDiff{
+					"file.go": {
+						OldRelPath: "file.go",
+						NewRelPath: "newfile.go",
+					},
+					"other.go": {
+						OldRelPath: "other.go",
+						NewRelPath: "other.go",
+						Hunks: []Hunk{
+							{
+								OldStart: 1,
+								OldCount: 1,
+								NewStart: 1,
+								NewCount: 1,
+							},
+						},
+					},
 				},
-				"other.go": {
-					NewRelPath: "other.go",
-					Hunks: []Hunk{
-						{
-							OldStart: 1,
-							OldCount: 1,
-							NewStart: 1,
-							NewCount: 1,
+				ToFile: map[string]*FileDiff{
+					"newfile.go": {
+						OldRelPath: "file.go",
+						NewRelPath: "newfile.go",
+					},
+					"other.go": {
+						OldRelPath: "other.go",
+						NewRelPath: "other.go",
+						Hunks: []Hunk{
+							{
+								OldStart: 1,
+								OldCount: 1,
+								NewStart: 1,
+								NewCount: 1,
+							},
 						},
 					},
 				},
@@ -123,15 +145,67 @@ func TestDiff(t *testing.T) {
 					+}
 				`,
 			},
-			wantFileDiffs: map[string]FileDiff{
-				"main.go": {
-					NewRelPath: "main.go",
-					Hunks: []Hunk{
-						{
-							OldStart: 10,
-							OldCount: 1,
-							NewStart: 12,
-							NewCount: 1,
+			wantDiff: CombinedDiff{
+				FromFile: map[string]*FileDiff{
+					"main.go": {
+						OldRelPath: "main.go",
+						NewRelPath: "main.go",
+						Hunks: []Hunk{
+							{
+								OldStart: 10,
+								OldCount: 1,
+								NewStart: 12,
+								NewCount: 1,
+							},
+						},
+					},
+				},
+				ToFile: map[string]*FileDiff{
+					"main.go": {
+						OldRelPath: "main.go",
+						NewRelPath: "main.go",
+						Hunks: []Hunk{
+							{
+								OldStart: 10,
+								OldCount: 1,
+								NewStart: 12,
+								NewCount: 1,
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "newly added file (from /dev/null)",
+			commitA: "HEAD",
+			runMock: &runMock{
+				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
+				out: `
+					diff --git a/new.go b/new.go
+					new file mode 100644
+					index 0000000..8a1218a
+					--- /dev/null
+					+++ b/new.go
+					@@ -0,0 +1,2 @@
+					+func main() {
+					+}
+				`,
+			},
+			wantDiff: CombinedDiff{
+				FromFile: map[string]*FileDiff{},
+				ToFile: map[string]*FileDiff{
+					"new.go": {
+						OldRelPath: "",
+						NewRelPath: "new.go",
+						Hunks: []Hunk{
+							{
+								OldStart: 0,
+								OldCount: 0,
+								NewStart: 1,
+								NewCount: 2,
+							},
 						},
 					},
 				},
@@ -152,15 +226,32 @@ func TestDiff(t *testing.T) {
 					+func main() {
 				`,
 			},
-			wantFileDiffs: map[string]FileDiff{
-				"main.go": {
-					NewRelPath: "main.go",
-					Hunks: []Hunk{
-						{
-							OldStart: 10,
-							OldCount: 3,
-							NewStart: 12,
-							NewCount: 1,
+			wantDiff: CombinedDiff{
+				FromFile: map[string]*FileDiff{
+					"main.go": {
+						OldRelPath: "main.go",
+						NewRelPath: "main.go",
+						Hunks: []Hunk{
+							{
+								OldStart: 10,
+								OldCount: 3,
+								NewStart: 12,
+								NewCount: 1,
+							},
+						},
+					},
+				},
+				ToFile: map[string]*FileDiff{
+					"main.go": {
+						OldRelPath: "main.go",
+						NewRelPath: "main.go",
+						Hunks: []Hunk{
+							{
+								OldStart: 10,
+								OldCount: 3,
+								NewStart: 12,
+								NewCount: 1,
+							},
 						},
 					},
 				},
@@ -183,15 +274,32 @@ func TestDiff(t *testing.T) {
 					+}
 				`,
 			},
-			wantFileDiffs: map[string]FileDiff{
-				"main.go": {
-					NewRelPath: "main.go",
-					Hunks: []Hunk{
-						{
-							OldStart: 10,
-							OldCount: 1,
-							NewStart: 12,
-							NewCount: 3,
+			wantDiff: CombinedDiff{
+				FromFile: map[string]*FileDiff{
+					"main.go": {
+						OldRelPath: "main.go",
+						NewRelPath: "main.go",
+						Hunks: []Hunk{
+							{
+								OldStart: 10,
+								OldCount: 1,
+								NewStart: 12,
+								NewCount: 3,
+							},
+						},
+					},
+				},
+				ToFile: map[string]*FileDiff{
+					"main.go": {
+						OldRelPath: "main.go",
+						NewRelPath: "main.go",
+						Hunks: []Hunk{
+							{
+								OldStart: 10,
+								OldCount: 1,
+								NewStart: 12,
+								NewCount: 3,
+							},
 						},
 					},
 				},
@@ -205,13 +313,13 @@ func TestDiff(t *testing.T) {
 			t.Parallel()
 
 			client := newMockClient(t, tt.runMock)
-			gotFileDiffs, err := client.Diff(context.Background(), tt.commitA, tt.commitB...)
+			gotDiff, err := client.Diff(context.Background(), tt.commitA, tt.commitB...)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Diff() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			if diff := cmp.Diff(tt.wantFileDiffs, gotFileDiffs); diff != "" {
+			if diff := cmp.Diff(tt.wantDiff, gotDiff); diff != "" {
 				t.Errorf("Diff() parsed struct mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -314,6 +422,107 @@ func TestToNewLine(t *testing.T) {
 			got := tt.fileDiff.ToNewLine(tt.oldLine)
 			if diff := cmp.Diff(tt.wantNewLine, got); diff != "" {
 				t.Errorf("ToNewLine() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestToOldLine(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		fileDiff    FileDiff
+		newLine     int
+		wantOldLine int
+	}{
+		{
+			name:        "no hunks in file diff (returns original line)",
+			fileDiff:    FileDiff{},
+			newLine:     5,
+			wantOldLine: 5,
+		},
+		{
+			name: "deletions and modifications strictly before target line",
+			fileDiff: FileDiff{
+				Hunks: []Hunk{
+					{
+						OldStart: 1,
+						OldCount: 2,
+						NewStart: 1,
+						NewCount: 0,
+					},
+					{
+						OldStart: 5,
+						OldCount: 2,
+						NewStart: 3,
+						NewCount: 2,
+					},
+				},
+			},
+			newLine:     5,
+			wantOldLine: 7,
+		},
+		{
+			name: "pure insertion strictly after target line (triggers left side of first if statement)",
+			fileDiff: FileDiff{
+				Hunks: []Hunk{
+					{
+						OldStart: 10,
+						OldCount: 0,
+						NewStart: 10,
+						NewCount: 2,
+					},
+				},
+			},
+			newLine:     5,
+			wantOldLine: 5,
+		},
+		{
+			name: "pure deletion exactly at target line (triggers right side of first if statement)",
+			fileDiff: FileDiff{
+				Hunks: []Hunk{
+					{
+						OldStart: 10,
+						OldCount: 2,
+						NewStart: 10,
+						NewCount: 0,
+					},
+					{
+						OldStart: 12,
+						OldCount: 0,
+						NewStart: 10,
+						NewCount: 2,
+					},
+				},
+			},
+			newLine:     10,
+			wantOldLine: 10,
+		},
+		{
+			name: "target line added at exact start boundary (triggers second if statement)",
+			fileDiff: FileDiff{
+				Hunks: []Hunk{
+					{
+						OldStart: 5,
+						OldCount: 0,
+						NewStart: 5,
+						NewCount: 3,
+					},
+				},
+			},
+			newLine:     5,
+			wantOldLine: -1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.fileDiff.ToOldLine(tt.newLine)
+			if diff := cmp.Diff(tt.wantOldLine, got); diff != "" {
+				t.Errorf("ToOldLine() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

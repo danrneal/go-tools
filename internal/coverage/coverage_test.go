@@ -125,6 +125,457 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestRegressions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		files        Files
+		baseCoverage Files
+		combinedDiff git.CombinedDiff
+		want         []FileReport
+	}{
+		{
+			name:         "empty currentCoverage returns empty map",
+			files:        Files{},
+			baseCoverage: Files{},
+			combinedDiff: git.CombinedDiff{},
+			want:         []FileReport{},
+		},
+		{
+			name: "currentCoverage file with no lines returns empty map",
+			files: Files{
+				"main.go": {},
+			},
+			baseCoverage: Files{
+				"main.go": {
+					10: true,
+				},
+			},
+			combinedDiff: git.CombinedDiff{},
+			want:         []FileReport{},
+		},
+		{
+			name: "covered base line becomes uncovered (regression found)",
+			files: Files{
+				"main.go": {
+					10: false,
+				},
+			},
+			baseCoverage: Files{
+				"main.go": {
+					10: true,
+				},
+			},
+			combinedDiff: git.CombinedDiff{},
+			want: []FileReport{
+				{
+					RelPath: "main.go",
+					Lines:   []int{10},
+				},
+			},
+		},
+		{
+			name: "uncovered base line is safely ignored",
+			files: Files{
+				"main.go": {
+					10: false,
+					20: false,
+				},
+			},
+			baseCoverage: Files{
+				"main.go": {
+					10: false,
+					20: true,
+				},
+			},
+			combinedDiff: git.CombinedDiff{},
+			want: []FileReport{
+				{
+					RelPath: "main.go",
+					Lines:   []int{20},
+				},
+			},
+		},
+		{
+			name: "line completely missing from base coverage is safely ignored",
+			files: Files{
+				"main.go": {
+					10: false,
+					15: false,
+				},
+			},
+			baseCoverage: Files{
+				"main.go": {
+					10: true,
+				},
+			},
+			combinedDiff: git.CombinedDiff{},
+			want: []FileReport{
+				{
+					RelPath: "main.go",
+					Lines:   []int{10},
+				},
+			},
+		},
+		{
+			name: "covered base line shifts and file renamed (regression found at new line)",
+			files: Files{
+				"new_main.go": {
+					12: false,
+				},
+			},
+			baseCoverage: Files{
+				"main.go": {
+					10: true,
+				},
+			},
+			combinedDiff: git.CombinedDiff{
+				ToFile: map[string]*git.FileDiff{
+					"new_main.go": {
+						OldRelPath: "main.go",
+						NewRelPath: "new_main.go",
+						Hunks: []git.Hunk{
+							{
+								OldStart: 5,
+								OldCount: 0,
+								NewStart: 5,
+								NewCount: 2,
+							},
+						},
+					},
+				},
+			},
+			want: []FileReport{
+				{
+					RelPath: "new_main.go",
+					Lines:   []int{12},
+				},
+			},
+		},
+		{
+			name: "covered line remains covered alongside regressions",
+			files: Files{
+				"main.go": {
+					10: true,
+					20: false,
+				},
+			},
+			baseCoverage: Files{
+				"main.go": {
+					10: true,
+					20: true,
+				},
+			},
+			combinedDiff: git.CombinedDiff{},
+			want: []FileReport{
+				{
+					RelPath: "main.go",
+					Lines:   []int{20},
+				},
+			},
+		},
+		{
+			name: "completely new file is safely ignored",
+			files: Files{
+				"new_file.go": {
+					10: false,
+				},
+				"z_regression.go": {
+					10: false,
+				},
+			},
+			baseCoverage: Files{
+				"z_regression.go": {
+					10: true,
+				},
+			},
+			combinedDiff: git.CombinedDiff{},
+			want: []FileReport{
+				{
+					RelPath: "z_regression.go",
+					Lines:   []int{10},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.files.Regressions(tt.baseCoverage, tt.combinedDiff)
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Regressions() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestUncoveredAdditions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		files        Files
+		baseCoverage Files
+		combinedDiff git.CombinedDiff
+		want         []FileReport
+	}{
+		{
+			name:         "empty coverage returns empty slice",
+			files:        Files{},
+			baseCoverage: Files{},
+			combinedDiff: git.CombinedDiff{},
+			want:         []FileReport{},
+		},
+		{
+			name: "non-empty coverage with no lines returns empty slice",
+			files: Files{
+				"main.go": {},
+			},
+			baseCoverage: Files{},
+			combinedDiff: git.CombinedDiff{},
+			want:         []FileReport{},
+		},
+		{
+			name: "untracked file missing from diff is reported as new",
+			files: Files{
+				"main.go": {
+					10: false,
+				},
+			},
+			baseCoverage: Files{},
+			combinedDiff: git.CombinedDiff{},
+			want: []FileReport{
+				{
+					RelPath: "main.go",
+					Lines:   []int{10},
+				},
+			},
+		},
+		{
+			name: "uncovered line outside of new hunks is ignored",
+			files: Files{
+				"main.go": {
+					10: false,
+					22: false,
+				},
+			},
+			baseCoverage: Files{
+				"main.go": {
+					10: false,
+				},
+			},
+			combinedDiff: git.CombinedDiff{
+				ToFile: map[string]*git.FileDiff{
+					"main.go": {
+						NewRelPath: "main.go",
+						Hunks: []git.Hunk{
+							{
+								OldStart: 20,
+								OldCount: 0,
+								NewStart: 20,
+								NewCount: 5,
+							},
+						},
+					},
+				},
+			},
+			want: []FileReport{
+				{
+					RelPath: "main.go",
+					Lines:   []int{22},
+				},
+			},
+		},
+		{
+			name: "covered line inside new hunk is safely ignored",
+			files: Files{
+				"main.go": {
+					10: true,
+					20: false,
+				},
+			},
+			baseCoverage: Files{
+				"main.go": {
+					5: true,
+				},
+			},
+			combinedDiff: git.CombinedDiff{
+				ToFile: map[string]*git.FileDiff{
+					"main.go": {
+						NewRelPath: "main.go",
+						Hunks: []git.Hunk{
+							{
+								OldStart: 10,
+								OldCount: 0,
+								NewStart: 10,
+								NewCount: 15,
+							},
+						},
+					},
+				},
+			},
+			want: []FileReport{
+				{
+					RelPath: "main.go",
+					Lines:   []int{20},
+				},
+			},
+		},
+		{
+			name: "unmodified file with uncovered lines is safely ignored alongside new code",
+			files: Files{
+				"a_unmodified.go": {
+					10: false,
+				},
+				"z_new.go": {
+					10: false,
+				},
+			},
+			baseCoverage: Files{
+				"a_unmodified.go": {
+					10: false,
+				},
+			},
+			combinedDiff: git.CombinedDiff{
+				ToFile: map[string]*git.FileDiff{
+					"z_new.go": {
+						NewRelPath: "z_new.go",
+						Hunks: []git.Hunk{
+							{
+								OldStart: 10,
+								OldCount: 0,
+								NewStart: 10,
+								NewCount: 2,
+							},
+						},
+					},
+				},
+			},
+			want: []FileReport{
+				{
+					RelPath: "z_new.go",
+					Lines:   []int{10},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.files.UncoveredAdditions(tt.baseCoverage, tt.combinedDiff)
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("UncoveredAdditions() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFiles_FormatLineRanges(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		files      Files
+		fileReport FileReport
+		want       []string
+	}{
+		{
+			name: "report with only one line returns single string",
+			files: Files{
+				"main.go": {
+					10: false,
+				},
+			},
+			fileReport: FileReport{
+				RelPath: "main.go",
+				Lines:   []int{10},
+			},
+			want: []string{"10"},
+		},
+		{
+			name: "report with gap >= 1 splits the range if gap lines are covered",
+			files: Files{
+				"main.go": {
+					10: false,
+					11: true,
+					12: false,
+					15: false,
+				},
+			},
+			fileReport: FileReport{
+				RelPath: "main.go",
+				Lines:   []int{10, 12, 15},
+			},
+			want: []string{"10", "12", "15"},
+		},
+		{
+			name: "report with gap == 0 bridges the range",
+			files: Files{
+				"main.go": {
+					10: false,
+					11: false,
+				},
+			},
+			fileReport: FileReport{
+				RelPath: "main.go",
+				Lines:   []int{10, 11},
+			},
+			want: []string{"10-11"},
+		},
+		{
+			name: "gap == 1 with unexecutable line is bridged",
+			files: Files{
+				"main.go": {
+					9:  true,
+					10: false,
+					12: false,
+					13: false,
+				},
+			},
+			fileReport: FileReport{
+				RelPath: "main.go",
+				Lines:   []int{10, 12, 13},
+			},
+			want: []string{"10-13"},
+		},
+		{
+			name: "ends with bridged range",
+			files: Files{
+				"main.go": {
+					10: false,
+					11: false,
+					15: false,
+					16: false,
+				},
+			},
+			fileReport: FileReport{
+				RelPath: "main.go",
+				Lines:   []int{10, 11, 15, 16},
+			},
+			want: []string{"10-11", "15-16"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.files.FormatLineRanges(tt.fileReport)
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("FormatLineRanges() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestOverallPercentage(t *testing.T) {
 	t.Parallel()
 
@@ -205,320 +656,6 @@ func TestOverallPercentage(t *testing.T) {
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("OverallPercentage() mismatch (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestFindRegressions(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name            string
-		baseCoverage    Files
-		currentCoverage Files
-		fileDiffs       map[string]git.FileDiff
-		want            map[string][]int
-	}{
-		{
-			name:         "empty baseCoverage returns empty slice",
-			baseCoverage: Files{},
-			currentCoverage: Files{
-				"main.go": {
-					10: true,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{},
-			want:      map[string][]int{},
-		},
-		{
-			name: "baseCoverage file with no lines returns empty slice",
-			baseCoverage: Files{
-				"main.go": {},
-			},
-			currentCoverage: Files{
-				"main.go": {
-					10: true,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{},
-			want:      map[string][]int{},
-		},
-		{
-			name: "covered base line becomes uncovered (regression found)",
-			baseCoverage: Files{
-				"main.go": {
-					10: true,
-				},
-			},
-			currentCoverage: Files{
-				"main.go": {
-					10: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{},
-			want: map[string][]int{
-				"main.go": {10},
-			},
-		},
-		{
-			name: "uncovered base line is safely ignored",
-			baseCoverage: Files{
-				"main.go": {
-					10: false,
-					20: true,
-				},
-			},
-			currentCoverage: Files{
-				"main.go": {
-					10: false,
-					20: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{},
-			want: map[string][]int{
-				"main.go": {20},
-			},
-		},
-		{
-			name: "covered base line shifts and file renamed (regression found at new line)",
-			baseCoverage: Files{
-				"main.go": {
-					10: true,
-				},
-			},
-			currentCoverage: Files{
-				"new_main.go": {
-					12: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{
-				"main.go": {
-					NewRelPath: "new_main.go",
-					Hunks: []git.Hunk{
-						{
-							OldStart: 5,
-							OldCount: 0,
-							NewStart: 5,
-							NewCount: 2,
-						},
-					},
-				},
-			},
-			want: map[string][]int{
-				"new_main.go": {12},
-			},
-		},
-		{
-			name: "file missing from current coverage is safely ignored",
-			baseCoverage: Files{
-				"a_missing.go": {
-					10: true,
-				},
-				"z_regression.go": {
-					10: true,
-				},
-			},
-			currentCoverage: Files{
-				"z_regression.go": {
-					10: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{},
-			want: map[string][]int{
-				"z_regression.go": {10},
-			},
-		},
-		{
-			name: "covered line remains covered alongside regressions",
-			baseCoverage: Files{
-				"main.go": {
-					10: true,
-					20: true,
-				},
-			},
-			currentCoverage: Files{
-				"main.go": {
-					10: true,
-					20: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{},
-			want: map[string][]int{
-				"main.go": {20},
-			},
-		},
-		{
-			name: "line becomes non-executable (hits !ok for specific line)",
-			baseCoverage: Files{
-				"main.go": {
-					10: true,
-				},
-			},
-			currentCoverage: Files{
-				"main.go": {
-					11: true,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{},
-			want:      map[string][]int{},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := FindRegressions(tt.baseCoverage, tt.currentCoverage, tt.fileDiffs)
-
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("FindRegressions() mismatch (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestFindNewUncoveredLines(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name            string
-		baseCoverage    Files
-		currentCoverage Files
-		fileDiffs       map[string]git.FileDiff
-		want            map[string][]int
-	}{
-		{
-			name:            "empty coverage returns empty slice",
-			baseCoverage:    Files{},
-			currentCoverage: Files{},
-			fileDiffs:       map[string]git.FileDiff{},
-			want:            map[string][]int{},
-		},
-		{
-			name:         "non-empty coverage with no lines returns empty slice",
-			baseCoverage: Files{},
-			currentCoverage: Files{
-				"main.go": {},
-			},
-			fileDiffs: map[string]git.FileDiff{},
-			want:      map[string][]int{},
-		},
-		{
-			name:         "untracked file missing from diff is reported as new",
-			baseCoverage: Files{},
-			currentCoverage: Files{
-				"main.go": {
-					10: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{},
-			want: map[string][]int{
-				"main.go": {10},
-			},
-		},
-		{
-			name: "uncovered line outside of new hunks is ignored",
-			baseCoverage: Files{
-				"main.go": {
-					10: false,
-				},
-			},
-			currentCoverage: Files{
-				"main.go": {
-					10: false,
-					22: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{
-				"main.go": {
-					NewRelPath: "main.go",
-					Hunks: []git.Hunk{
-						{
-							OldStart: 20,
-							OldCount: 0,
-							NewStart: 20,
-							NewCount: 5,
-						},
-					},
-				},
-			},
-			want: map[string][]int{
-				"main.go": {22},
-			},
-		},
-		{
-			name: "covered line inside new hunk is safely ignored",
-			baseCoverage: Files{
-				"main.go": {
-					5: true,
-				},
-			},
-			currentCoverage: Files{
-				"main.go": {
-					10: true,
-					20: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{
-				"main.go": {
-					NewRelPath: "main.go",
-					Hunks: []git.Hunk{
-						{
-							OldStart: 10,
-							OldCount: 0,
-							NewStart: 10,
-							NewCount: 15,
-						},
-					},
-				},
-			},
-			want: map[string][]int{
-				"main.go": {20},
-			},
-		},
-		{
-			name: "unmodified file with uncovered lines is safely ignored alongside new code",
-			baseCoverage: Files{
-				"a_unmodified.go": {
-					10: false,
-				},
-			},
-			currentCoverage: Files{
-				"a_unmodified.go": {
-					10: false,
-				},
-				"z_new.go": {
-					10: false,
-				},
-			},
-			fileDiffs: map[string]git.FileDiff{
-				"z_new.go": {
-					NewRelPath: "z_new.go",
-					Hunks: []git.Hunk{
-						{
-							OldStart: 10,
-							OldCount: 0,
-							NewStart: 10,
-							NewCount: 2,
-						},
-					},
-				},
-			},
-			want: map[string][]int{
-				"z_new.go": {10},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := FindNewUncoveredLines(tt.baseCoverage, tt.currentCoverage, tt.fileDiffs)
-
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("FindNewUncoveredLines() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

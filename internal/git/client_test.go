@@ -202,6 +202,8 @@ func newMockClient(t *testing.T, runMock *runMock) *Client {
 }
 
 func trimIndent(s string) string {
+	s = strings.TrimPrefix(s, "\n")
+
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
 		lines[i] = strings.TrimLeft(line, "\t ")

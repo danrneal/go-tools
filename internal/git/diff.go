@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"regexp"
 	"slices"
 	"strconv"
@@ -16,9 +17,17 @@ import (
 // The line counts are optional in unified diffs if they equal 1.
 var hunkRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
+// CombinedDiff contains the output of a git diff, pre-indexed for fast lookups
+// by either the original file path (FromFile) or the current file path (ToFile).
+type CombinedDiff struct {
+	FromFile map[string]*FileDiff
+	ToFile   map[string]*FileDiff
+}
+
 // FileDiff contains all the modifications made to a single file, including
 // potential renames and a list of line-shifting hunks.
 type FileDiff struct {
+	OldRelPath string
 	NewRelPath string
 	Hunks      []Hunk
 }
@@ -36,71 +45,20 @@ type Hunk struct {
 // Diff executes `git diff` against the provided commit(s) using strict formatting
 // flags (-U0, -M, --no-ext-diff) and parses the output into FileDiff structs.
 // It accepts one commit (to compare against dirty state) or two commits.
-func (c *Client) Diff(ctx context.Context, commitA string, commitB ...string) (map[string]FileDiff, error) {
+func (c *Client) Diff(ctx context.Context, commitA string, commitB ...string) (CombinedDiff, error) {
 	if len(commitB) > 1 {
-		return nil, errors.New("git diff accepts a maximum of two commits")
+		return CombinedDiff{}, errors.New("git diff accepts a maximum of two commits")
 	}
 
 	diff, err := c.runDiff(ctx, commitA, commitB...)
 	if err != nil {
-		return nil, err
+		return CombinedDiff{}, err
 	}
-
-	fileDiffs := map[string]FileDiff{}
 
 	reader := bytes.NewReader(diff)
+	combinedDiff, err := parseDiff(reader)
 
-	var oldRelPath, newRelPath string
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if suffix, ok := strings.CutPrefix(line, "rename from "); ok {
-			oldRelPath = suffix
-			continue
-		}
-
-		if suffix, ok := strings.CutPrefix(line, "rename to "); ok {
-			newRelPath = suffix
-			fileDiffs[oldRelPath] = FileDiff{
-				NewRelPath: newRelPath,
-			}
-
-			continue
-		}
-
-		if suffix, ok := strings.CutPrefix(line, "--- a/"); ok {
-			oldRelPath = suffix
-			continue
-		}
-
-		if suffix, ok := strings.CutPrefix(line, "+++ b/"); ok {
-			newRelPath = suffix
-			if _, ok := fileDiffs[oldRelPath]; !ok {
-				fileDiffs[oldRelPath] = FileDiff{
-					NewRelPath: newRelPath,
-				}
-			}
-
-			continue
-		}
-
-		matches := hunkRegex.FindStringSubmatch(line)
-		if matches == nil {
-			continue
-		}
-
-		hunk := parseHunk(matches)
-		fileDiff := fileDiffs[oldRelPath]
-		fileDiff.Hunks = append(fileDiff.Hunks, hunk)
-		fileDiffs[oldRelPath] = fileDiff
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to scan diff: %w", err)
-	}
-
-	return fileDiffs, nil
+	return combinedDiff, err
 }
 
 // runDiff builds the argument list and executes the git diff command via the client's runner.
@@ -113,6 +71,80 @@ func (c *Client) runDiff(ctx context.Context, commitA string, commitB ...string)
 	out, err := c.run(ctx, "diff", "-U0", "-M", "--no-ext-diff", commitA)
 
 	return out, err
+}
+
+// parseDiff reads a unified git diff from the provided reader and parses it
+// into a CombinedDiff struct, organizing the changes by their old and new file paths.
+func parseDiff(r io.Reader) (CombinedDiff, error) {
+	combinedDiff := CombinedDiff{
+		FromFile: map[string]*FileDiff{},
+		ToFile:   map[string]*FileDiff{},
+	}
+
+	var fileDiff *FileDiff
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		fileDiff = parseHeader(line, fileDiff)
+		if fileDiff == nil {
+			continue
+		}
+
+		oldRelPath := fileDiff.OldRelPath
+		if _, ok := combinedDiff.FromFile[oldRelPath]; !ok && oldRelPath != "" {
+			combinedDiff.FromFile[oldRelPath] = fileDiff
+		}
+
+		newRelPath := fileDiff.NewRelPath
+		if _, ok := combinedDiff.ToFile[newRelPath]; !ok && newRelPath != "" {
+			combinedDiff.ToFile[newRelPath] = fileDiff
+		}
+
+		matches := hunkRegex.FindStringSubmatch(line)
+		if matches == nil {
+			continue
+		}
+
+		hunk := parseHunk(matches)
+		fileDiff.Hunks = append(fileDiff.Hunks, hunk)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return CombinedDiff{}, fmt.Errorf("failed to scan diff: %w", err)
+	}
+
+	return combinedDiff, nil
+}
+
+// parseHeader examines a diff output line to determine if it is a file boundary
+// or path change indicator (e.g., "--- a/", "rename to "). It updates the provided
+// FileDiff object or initializes a new one, returning the current active pointer.
+func parseHeader(line string, fileDiff *FileDiff) *FileDiff {
+	switch {
+	case strings.HasPrefix(line, "rename from "):
+		oldRelPath := strings.TrimPrefix(line, "rename from ")
+		fileDiff = &FileDiff{
+			OldRelPath: oldRelPath,
+		}
+	case strings.HasPrefix(line, "--- a/"):
+		oldRelPath := strings.TrimPrefix(line, "--- a/")
+		if fileDiff == nil || fileDiff.OldRelPath != oldRelPath {
+			fileDiff = &FileDiff{
+				OldRelPath: oldRelPath,
+			}
+		}
+	case strings.HasPrefix(line, "--- /dev/null"):
+		fileDiff = &FileDiff{}
+	case strings.HasPrefix(line, "rename to "):
+		newRelPath := strings.TrimPrefix(line, "rename to ")
+		fileDiff.NewRelPath = newRelPath
+	case strings.HasPrefix(line, "+++ b/"):
+		newRelPath := strings.TrimPrefix(line, "+++ b/")
+		fileDiff.NewRelPath = newRelPath
+	}
+
+	return fileDiff
 }
 
 // parseHunk converts regex matches from a diff hunk header into a Hunk struct.
@@ -160,6 +192,26 @@ func (fd FileDiff) ToNewLine(oldLine int) int {
 	}
 
 	return newLine
+}
+
+// ToOldLine translates a line number from the modified file to its corresponding
+// line number in the original file. If the line was newly added or directly modified,
+// it returns -1.
+func (fd FileDiff) ToOldLine(newLine int) int {
+	oldLine := newLine
+	for _, hunk := range fd.Hunks {
+		if newLine < hunk.NewStart || (hunk.NewCount == 0 && newLine == hunk.NewStart) {
+			break
+		}
+
+		if newLine < hunk.NewStart+hunk.NewCount {
+			return -1
+		}
+
+		oldLine -= hunk.NewCount - hunk.OldCount
+	}
+
+	return oldLine
 }
 
 // IsAddition returns true if the given line number falls within a newly added
