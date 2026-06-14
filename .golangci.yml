@@ -206,6 +206,7 @@ linters:
     gocritic:
       enable-all: true
       disabled-checks:
+        - sloppyReassign
         # Reconsider after https://github.com/go-critic/go-critic/issues/1526 is resolved.
         - unnamedResult
       settings:
