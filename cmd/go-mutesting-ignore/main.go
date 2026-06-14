@@ -13,7 +13,6 @@ import (
 	"github.com/danrneal/go-tools/internal/git"
 	"github.com/danrneal/go-tools/internal/golang"
 	"github.com/danrneal/go-tools/internal/mutesting"
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/cover"
 )
 
@@ -47,138 +46,44 @@ func run(coverProfile string) error {
 		return fmt.Errorf("failed to create go client: %w", err)
 	}
 
-	headIgnoreFile, err := gitClient.Show(ctx, "HEAD", ignoreFilename)
+	ignoreFile, err := parseIgnoreFile()
 	if err != nil {
-		return fmt.Errorf("failed to fetch HEAD ignore file: %w", err)
+		return err
 	}
 
-	dirtyIgnoreFile, err := os.OpenFile(ignoreFilename, os.O_RDWR|os.O_CREATE, 0o600)
+	worktree, cleanup, err := createDirtyWorktree(ctx, gitClient)
 	if err != nil {
-		return fmt.Errorf("failed to open or create .go-mutesting-ignore: %w", err)
-	}
-
-	defer dirtyIgnoreFile.Close()
-
-	headIgnore, err := mutesting.ParseIgnoreFile(headIgnoreFile)
-	if err != nil {
-		return fmt.Errorf("failed to parse HEAD ignore file: %w", err)
-	}
-
-	dirtyIgnore, err := mutesting.ParseIgnoreFile(dirtyIgnoreFile)
-	if err != nil {
-		return fmt.Errorf("failed to parse ignore file: %w", err)
-	}
-
-	headWorktree, cleanup, err := gitClient.CreateWorktree(ctx, "HEAD")
-	if err != nil {
-		return fmt.Errorf("failed to setup head worktree: %w", err)
+		return err
 	}
 
 	defer cleanup()
 
-	dirtyWorktree, cleanup, err := gitClient.CreateWorktree(ctx, "HEAD")
+	mutestingClient, err := mutesting.NewClient(worktree)
 	if err != nil {
-		return fmt.Errorf("failed to setup dirty worktree: %w", err)
+		return fmt.Errorf("failed to create mutantesting client: %w", err)
 	}
 
-	defer cleanup()
-
-	if err = gitClient.SyncDirtyFiles(ctx, dirtyWorktree); err != nil {
-		return fmt.Errorf("failed to sync dirty files: %w", err)
-	}
-
-	headMutestingClient, err := mutesting.NewClient(headWorktree)
+	mutations, err := mutestingClient.GenerateMutations(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create head mutant client: %w", err)
+		return fmt.Errorf("mutesting pre-run failed: %w", err)
 	}
 
-	dirtyMutestingClient, err := mutesting.NewClient(dirtyWorktree)
+	if err = updateIgnoreFile(ctx, gitClient, ignoreFile, mutations); err != nil {
+		return err
+	}
+
+	fileCoverage, err := parseCoverProfile(ctx, goClient, coverProfile)
 	if err != nil {
-		return fmt.Errorf("failed to create dirty mutant client: %w", err)
+		return err
 	}
 
-	g, gCtx := errgroup.WithContext(ctx)
-
-	var headMutations map[mutesting.Mutation]string
-	g.Go(func() error {
-		var headErr error
-		if headMutations, headErr = headMutestingClient.GenerateMutations(gCtx); headErr != nil {
-			return fmt.Errorf("head pre-run failed: %w", headErr)
-		}
-
-		return nil
-	})
-
-	var dirtyMutations map[mutesting.Mutation]string
-	g.Go(func() error {
-		var dirtyErr error
-		if dirtyMutations, dirtyErr = dirtyMutestingClient.GenerateMutations(gCtx); dirtyErr != nil {
-			return fmt.Errorf("dirty pre-run failed: %w", dirtyErr)
-		}
-
-		return nil
-	})
-
-	if err = g.Wait(); err != nil {
-		return fmt.Errorf("parallel pre-runs failed: %w", err)
+	if err = createBlacklist(ignoreFile, mutations, fileCoverage, worktree); err != nil {
+		return err
 	}
 
-	headDiffs, err := gitClient.Diff(ctx, headIgnore.LastSyncedCommit, "HEAD")
+	summary, err := mutest(ctx, mutestingClient, gitClient, worktree)
 	if err != nil {
-		return fmt.Errorf("failed to get ${LAST_SYNCED_COMMIT}...HEAD diffs: %w", err)
-	}
-
-	dirtyDiffs, err := gitClient.Diff(ctx, "HEAD")
-	if err != nil {
-		return fmt.Errorf("failed to get HEAD...Dirty diffs: %w", err)
-	}
-
-	head, err := gitClient.Head(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get HEAD: %w", err)
-	}
-
-	dirtyIgnoreFile, err = os.Create(ignoreFilename)
-	if err != nil {
-		return fmt.Errorf("failed to open ignore file for writing: %w", err)
-	}
-
-	defer dirtyIgnoreFile.Close()
-
-	dirtyIgnore.Update(headIgnore.Mutations, headDiffs, headMutations, head)
-	if err = dirtyIgnore.WriteIgnoreFile(dirtyIgnoreFile); err != nil {
-		return fmt.Errorf("failed to save updated ignore file: %w", err)
-	}
-
-	headIgnore.Update(headIgnore.Mutations, headDiffs, headMutations, head)
-	dirtyIgnore.Update(headIgnore.Mutations, dirtyDiffs, dirtyMutations, "")
-
-	coverProfiles, err := cover.ParseProfiles(coverProfile)
-	if err != nil {
-		return fmt.Errorf("error parsing coverage profile: %w", err)
-	}
-
-	modulePath, err := goClient.ModulePath(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get module path: %w", err)
-	}
-
-	fileCoverage := coverage.Parse(coverProfiles, modulePath)
-
-	blacklist := createBlacklist(dirtyMutations, dirtyIgnore.Mutations, fileCoverage)
-	blacklistData := []byte(strings.Join(blacklist, "\n"))
-	blacklistPath := filepath.Join(dirtyWorktree, "go-mutesting.blacklist")
-	if err = os.WriteFile(blacklistPath, blacklistData, 0o600); err != nil {
-		return fmt.Errorf("failed to write blacklist: %w", err)
-	}
-
-	summary, err := dirtyMutestingClient.Mutest(ctx)
-	if err != nil {
-		return fmt.Errorf("mutation testing failed: %w", err)
-	}
-
-	if err := gitClient.CopyFromWorktree("go-mutesting-report.html", dirtyWorktree); err != nil {
-		return fmt.Errorf("failed to copy report from worktree: %w", err)
+		return err
 	}
 
 	fmt.Fprintln(os.Stdout, summary)
@@ -186,21 +91,183 @@ func run(coverProfile string) error {
 	return nil
 }
 
+// parseIgnoreFile opens and parses the dirty ignore file from the current working directory.
+func parseIgnoreFile() (*mutesting.IgnoreFile, error) {
+	file, err := os.OpenFile(ignoreFilename, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open or create .go-mutesting-ignore: %w", err)
+	}
+
+	defer file.Close()
+
+	ignoreFile, err := mutesting.ParseIgnoreFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ignore file: %w", err)
+	}
+
+	return ignoreFile, nil
+}
+
+// createDirtyWorktree creates a new git worktree based on HEAD and syncs any dirty files into it.
+func createDirtyWorktree(ctx context.Context, gitClient *git.Client) (string, func(), error) {
+	worktree, cleanup, err := gitClient.CreateWorktree(ctx, "HEAD")
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to setup worktree: %w", err)
+	}
+
+	if err = gitClient.SyncDirtyFiles(ctx, worktree); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to sync dirty files: %w", err)
+	}
+
+	return worktree, cleanup, nil
+}
+
+// updateIgnoreFile synchronizes the given ignore file with the latest diffs and mutations.
+func updateIgnoreFile(
+	ctx context.Context,
+	gitClient *git.Client,
+	ignoreFile *mutesting.IgnoreFile,
+	mutations map[mutesting.Mutation]string,
+) error {
+	headIgnoreFile, err := parseHeadIgnoreFile(ctx, gitClient)
+	if err != nil {
+		return nil
+	}
+
+	headMutations, err := generateHeadMutations(ctx, gitClient)
+	if err != nil {
+		return err
+	}
+
+	combinedDiff, err := gitClient.Diff(ctx, "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD...Dirty diffs: %w", err)
+	}
+
+	headCombinedDiff, err := gitClient.Diff(ctx, headIgnoreFile.LastSyncedCommit, "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to get ${LAST_SYNCED_COMMIT}...HEAD diffs: %w", err)
+	}
+
+	head, err := gitClient.Head(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD: %w", err)
+	}
+
+	file, err := os.Create(ignoreFilename)
+	if err != nil {
+		return fmt.Errorf("failed to open ignore file for writing: %w", err)
+	}
+
+	defer file.Close()
+
+	ignoreFile.Update(headIgnoreFile.Mutations, headCombinedDiff, headMutations, head)
+	if err = ignoreFile.WriteIgnoreFile(file); err != nil {
+		return fmt.Errorf("failed to save updated ignore file: %w", err)
+	}
+
+	headIgnoreFile.Update(headIgnoreFile.Mutations, headCombinedDiff, headMutations, head)
+	ignoreFile.Update(headIgnoreFile.Mutations, combinedDiff, mutations, "")
+
+	return nil
+}
+
+// parseHeadIgnoreFile retrieves and parses the ignore file from the HEAD commit.
+func parseHeadIgnoreFile(ctx context.Context, gitClient *git.Client) (*mutesting.IgnoreFile, error) {
+	file, err := gitClient.Show(ctx, "HEAD", ignoreFilename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch HEAD ignore file: %w", err)
+	}
+
+	headIgnoreFile, err := mutesting.ParseIgnoreFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse HEAD ignore file: %w", err)
+	}
+
+	return headIgnoreFile, nil
+}
+
+// generateHeadMutations prepares a worktree for the HEAD commit and generates its mutations.
+func generateHeadMutations(ctx context.Context, gitClient *git.Client) (map[mutesting.Mutation]string, error) {
+	headWorktree, cleanup, err := gitClient.CreateWorktree(ctx, "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup head worktree: %w", err)
+	}
+
+	defer cleanup()
+
+	headMutestingClient, err := mutesting.NewClient(headWorktree)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create head mutant client: %w", err)
+	}
+
+	headMutations, err := headMutestingClient.GenerateMutations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("head pre-run failed: %w", err)
+	}
+
+	return headMutations, nil
+}
+
+// parseCoverProfile reads the coverage profile and processes it into coverage ranges per file.
+func parseCoverProfile(ctx context.Context, goClient *golang.Client, coverProfile string) (coverage.Files, error) {
+	coverProfiles, err := cover.ParseProfiles(coverProfile)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing coverage profile: %w", err)
+	}
+
+	modulePath, err := goClient.ModulePath(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get module path: %w", err)
+	}
+
+	fileCoverage := coverage.Parse(coverProfiles, modulePath)
+
+	return fileCoverage, nil
+}
+
 // createBlacklist generates a list of mutation checksums to be blacklisted based on the existing mutations,
 // ignore lists, and test coverage information.
 func createBlacklist(
+	ignoreFile *mutesting.IgnoreFile,
 	mutations map[mutesting.Mutation]string,
-	ignoreMutations map[mutesting.Mutation]bool,
 	fileCoverage coverage.Files,
-) []string {
+	worktree string,
+) error {
 	blacklist := []string{}
 	for mutation, checksum := range mutations {
 		if covered, ok := fileCoverage[mutation.RelPath][mutation.StartLine]; !ok || !covered {
 			blacklist = append(blacklist, checksum)
-		} else if ignoreMutations[mutation] {
+		} else if ignoreFile.Mutations[mutation] {
 			blacklist = append(blacklist, checksum)
 		}
 	}
 
-	return blacklist
+	blacklistData := []byte(strings.Join(blacklist, "\n"))
+	blacklistPath := filepath.Join(worktree, "go-mutesting.blacklist")
+	if err := os.WriteFile(blacklistPath, blacklistData, 0o600); err != nil {
+		return fmt.Errorf("failed to write blacklist: %w", err)
+	}
+
+	return nil
+}
+
+// mutest executes the mutation testing command on the target worktree and fetches the summary report.
+func mutest(
+	ctx context.Context,
+	mutestingClient *mutesting.Client,
+	gitClient *git.Client,
+	worktree string,
+) (string, error) {
+	summary, err := mutestingClient.Mutest(ctx)
+	if err != nil {
+		return "", fmt.Errorf("mutation testing failed: %w", err)
+	}
+
+	if err := gitClient.CopyFromWorktree("go-mutesting-report.html", worktree); err != nil {
+		return "", fmt.Errorf("failed to copy report from worktree: %w", err)
+	}
+
+	return summary, nil
 }
