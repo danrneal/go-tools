@@ -65,12 +65,19 @@ func (c *Client) Diff(ctx context.Context, commitA string, commitB ...string) (C
 func (c *Client) runDiff(ctx context.Context, commitA string, commitB ...string) ([]byte, error) {
 	if len(commitB) == 1 {
 		out, err := c.run(ctx, "diff", "-U0", "-M", "--no-ext-diff", commitA, commitB[0])
-		return out, err
+		if err != nil {
+			return nil, fmt.Errorf("failed to run git diff: %w", err)
+		}
+
+		return out, nil
 	}
 
 	out, err := c.run(ctx, "diff", "-U0", "-M", "--no-ext-diff", commitA)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run git diff: %w", err)
+	}
 
-	return out, err
+	return out, nil
 }
 
 // parseDiff reads a unified git diff from the provided reader and parses it

@@ -50,24 +50,36 @@ func NewClient(dir ...string) (*Client, error) {
 // Show executes `git show` for a specific commit and file path, returning the output as an [io.Reader].
 func (c *Client) Show(ctx context.Context, commit, relPath string) (io.Reader, error) {
 	out, err := c.run(ctx, "show", fmt.Sprintf("%s:%s", commit, relPath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to run git show: %w", err)
+	}
+
 	reader := bytes.NewReader(out)
 
-	return reader, err
+	return reader, nil
 }
 
 // Head executes `git rev-parse HEAD` and returns the full commit hash
 // of the current HEAD.
 func (c *Client) Head(ctx context.Context) (string, error) {
 	out, err := c.run(ctx, "rev-parse", "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("failed to run git rev-parse HEAD: %w", err)
+	}
+
 	head := strings.TrimSpace(string(out))
 
-	return head, err
+	return head, nil
 }
 
 // status executes `git status -z` and returns the raw null-terminated output string.
 func (c *Client) status(ctx context.Context) (string, error) {
 	out, err := c.run(ctx, "status", "-z")
+	if err != nil {
+		return "", fmt.Errorf("failed to run git status: %w", err)
+	}
+
 	status := string(out)
 
-	return status, err
+	return status, nil
 }

@@ -36,7 +36,11 @@ func (c *Client) CreateWorktree(ctx context.Context, commit string) (string, fun
 // addWorktree executes the git command to add a new detached worktree.
 func (c *Client) addWorktree(ctx context.Context, worktree, commit string) error {
 	_, err := c.run(ctx, "worktree", "add", "--detach", worktree, commit)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to run git worktree add: %w", err)
+	}
+
+	return nil
 }
 
 // removeWorktree executes the git command to forcefully remove a worktree.
