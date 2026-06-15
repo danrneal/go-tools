@@ -203,6 +203,9 @@ linters:
     gocognit:
       min-complexity: 20
 
+    goconst:
+      ignore-tests: true
+
     gocritic:
       enable-all: true
       disabled-checks:
@@ -385,7 +388,6 @@ linters:
           - dupl
           - funlen
           - gocognit
-          - goconst
           - gosec
           - noctx
           - wrapcheck
