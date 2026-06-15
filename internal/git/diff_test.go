@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestDiff(t *testing.T) {
+func TestClient_Diff(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -20,7 +20,7 @@ func TestDiff(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name:     "more than two commits returns error",
+			name:     "more than two commits",
 			commitA:  "commit1",
 			commitB:  []string{"commit2", "commit3"},
 			runMock:  nil,
@@ -28,7 +28,7 @@ func TestDiff(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:    "two commits compares range",
+			name:    "two commits",
 			commitA: "base-commit",
 			commitB: []string{"HEAD"},
 			runMock: &runMock{
@@ -39,7 +39,7 @@ func TestDiff(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:    "returns error if underlying git command fails",
+			name:    "underlying git command fails",
 			commitA: "HEAD",
 			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
@@ -326,7 +326,7 @@ func TestDiff(t *testing.T) {
 	}
 }
 
-func TestToNewLine(t *testing.T) {
+func TestFileDiff_ToNewLine(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -336,13 +336,13 @@ func TestToNewLine(t *testing.T) {
 		wantNewLine int
 	}{
 		{
-			name:        "no hunks in file diff (returns original line)",
+			name:        "no hunks in file diff",
 			fileDiff:    FileDiff{},
 			oldLine:     5,
 			wantNewLine: 5,
 		},
 		{
-			name: "insertions and modifications strictly before target line",
+			name: "insertions and modifications before target line",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -363,7 +363,7 @@ func TestToNewLine(t *testing.T) {
 			wantNewLine: 7,
 		},
 		{
-			name: "pure insertion strictly after target line (triggers left side of first if statement)",
+			name: "insertion after target line",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -378,7 +378,7 @@ func TestToNewLine(t *testing.T) {
 			wantNewLine: 5,
 		},
 		{
-			name: "pure insertion exactly at target line (triggers right side of first if statement)",
+			name: "insertion exactly at target line",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -399,7 +399,7 @@ func TestToNewLine(t *testing.T) {
 			wantNewLine: 10,
 		},
 		{
-			name: "target line deleted at exact start boundary (triggers second if statement)",
+			name: "target line deleted at start of hunk",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -427,7 +427,7 @@ func TestToNewLine(t *testing.T) {
 	}
 }
 
-func TestToOldLine(t *testing.T) {
+func TestFileDiff_ToOldLine(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -437,13 +437,13 @@ func TestToOldLine(t *testing.T) {
 		wantOldLine int
 	}{
 		{
-			name:        "no hunks in file diff (returns original line)",
+			name:        "no hunks in file diff",
 			fileDiff:    FileDiff{},
 			newLine:     5,
 			wantOldLine: 5,
 		},
 		{
-			name: "deletions and modifications strictly before target line",
+			name: "deletions and modifications before target line",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -464,7 +464,7 @@ func TestToOldLine(t *testing.T) {
 			wantOldLine: 7,
 		},
 		{
-			name: "pure insertion strictly after target line (triggers left side of first if statement)",
+			name: "insertion after target line",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -479,7 +479,7 @@ func TestToOldLine(t *testing.T) {
 			wantOldLine: 5,
 		},
 		{
-			name: "pure deletion exactly at target line (triggers right side of first if statement)",
+			name: "deletion exactly at target line",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -500,7 +500,7 @@ func TestToOldLine(t *testing.T) {
 			wantOldLine: 10,
 		},
 		{
-			name: "target line added at exact start boundary (triggers second if statement)",
+			name: "target line added at start of hunk",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -528,7 +528,7 @@ func TestToOldLine(t *testing.T) {
 	}
 }
 
-func TestIsAddition(t *testing.T) {
+func TestFileDiff_IsAddition(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -538,7 +538,7 @@ func TestIsAddition(t *testing.T) {
 		want     bool
 	}{
 		{
-			name: "line exactly at exclusive end boundary",
+			name: "line at end boundary",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -553,7 +553,7 @@ func TestIsAddition(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "line strictly before hunk",
+			name: "line before hunk",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{
@@ -568,7 +568,7 @@ func TestIsAddition(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "line exactly at start boundary",
+			name: "line at start boundary",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
 					{

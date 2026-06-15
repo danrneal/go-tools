@@ -11,7 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestCreateWorktree(t *testing.T) {
+func TestClient_CreateWorktree(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -92,7 +92,7 @@ func TestCreateWorktree(t *testing.T) {
 	}
 }
 
-func TestSyncDirtyFiles(t *testing.T) {
+func TestClient_SyncDirtyFiles(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -132,7 +132,7 @@ func TestSyncDirtyFiles(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:          "deleted file ignores error if already missing from worktree",
+			name:          "deleted file already missing from worktree",
 			status:        "D  already_missing.go\x00",
 			setupRepo:     map[string]string{},
 			setupWorktree: map[string]string{},
@@ -185,7 +185,7 @@ func TestSyncDirtyFiles(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "renamed file ignores error if old file is already missing",
+			name:   "renamed file old file already missing",
 			status: "R  new.go\x00old.go\x00",
 			setupRepo: map[string]string{
 				"new.go": "new content",
@@ -197,14 +197,14 @@ func TestSyncDirtyFiles(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:         "returns error if git status fails",
+			name:         "git status fails",
 			status:       "",
 			runErr:       errors.New("git status failed"),
 			wantWorktree: map[string]string{},
 			wantErr:      true,
 		},
 		{
-			name:         "returns error if copyFile fails",
+			name:         "copyFile fails",
 			status:       "M  missing.go\x00",
 			setupRepo:    map[string]string{},
 			wantWorktree: map[string]string{},
@@ -292,7 +292,7 @@ func TestSyncDirtyFiles(t *testing.T) {
 	}
 }
 
-func TestCopyFromWorktree(t *testing.T) {
+func TestClient_CopyFromWorktree(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -318,7 +318,7 @@ func TestCopyFromWorktree(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:          "returns error if file is missing from worktree",
+			name:          "file missing from worktree",
 			relPath:       "missing.go",
 			setupRepo:     map[string]string{},
 			setupWorktree: map[string]string{},

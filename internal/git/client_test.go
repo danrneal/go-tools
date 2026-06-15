@@ -38,7 +38,7 @@ func TestNewClient(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "two arguments returns error",
+			name:    "two arguments",
 			dirs:    []string{"/tmp/workspace", "/var/lib"},
 			wantErr: true,
 		},
@@ -64,7 +64,7 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-func TestShow(t *testing.T) {
+func TestClient_Show(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -76,7 +76,7 @@ func TestShow(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "successfully executes show and returns reader",
+			name:    "valid execution",
 			commit:  "a1b2c3",
 			relPath: "main.go",
 			runMock: &runMock{
@@ -88,7 +88,7 @@ func TestShow(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "returns error if git command fails",
+			name:    "git command fails",
 			commit:  "HEAD",
 			relPath: "missing.go",
 			runMock: &runMock{
@@ -128,7 +128,7 @@ func TestShow(t *testing.T) {
 	}
 }
 
-func TestHead(t *testing.T) {
+func TestClient_Head(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -148,7 +148,7 @@ func TestHead(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name: "returns error if git command fails",
+			name: "git command fails",
 			runMock: &runMock{
 				wantArgs: []string{"rev-parse", "HEAD"},
 				out:      "",

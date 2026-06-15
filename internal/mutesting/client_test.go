@@ -37,7 +37,7 @@ func TestNewClient(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "two arguments returns error",
+			name:    "two arguments",
 			dirs:    []string{"/tmp/workspace", "/var/lib"},
 			wantErr: true,
 		},
@@ -63,7 +63,7 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-func TestMutest(t *testing.T) {
+func TestClient_Mutest(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -73,7 +73,7 @@ func TestMutest(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "successful mutation test returns summary",
+			name: "valid execution",
 			runMock: &runMock{
 				wantArgs: []string{
 					"--html-output",
@@ -98,7 +98,7 @@ func TestMutest(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "returns error if command fails",
+			name: "command fails",
 			runMock: &runMock{
 				wantArgs: []string{
 					"--html-output",

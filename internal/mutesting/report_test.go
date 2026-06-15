@@ -11,7 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestGenerateMutations(t *testing.T) {
+func TestClient_GenerateMutations(t *testing.T) {
 	t.Parallel()
 
 	mockErr := errors.New("command failed")
@@ -66,7 +66,7 @@ func TestGenerateMutations(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "returns error if go-mutesting pre-run fails",
+			name: "go-mutesting pre-run fails",
 			runMock: &runMock{
 				wantArgs: []string{"--exec", "false", "./..."},
 				err:      mockErr,
@@ -77,7 +77,7 @@ func TestGenerateMutations(t *testing.T) {
 			errTarget: mockErr,
 		},
 		{
-			name: "returns error if report.json is missing",
+			name: "report.json is missing",
 			runMock: &runMock{
 				wantArgs: []string{"--exec", "false", "./..."},
 			},
@@ -87,7 +87,7 @@ func TestGenerateMutations(t *testing.T) {
 			errTarget: fs.ErrNotExist,
 		},
 		{
-			name: "returns error if JSON decoding fails",
+			name: "JSON decoding fails",
 			runMock: &runMock{
 				wantArgs: []string{"--exec", "false", "./..."},
 			},

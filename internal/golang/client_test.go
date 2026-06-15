@@ -39,7 +39,7 @@ func TestNewClient(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "two arguments returns error",
+			name:    "two arguments",
 			dirs:    []string{"/tmp/workspace", "/var/lib"},
 			wantErr: true,
 		},
@@ -65,7 +65,7 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-func TestModulePath(t *testing.T) {
+func TestClient_ModulePath(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -75,7 +75,7 @@ func TestModulePath(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "successfully returns module path",
+			name: "valid execution",
 			runMock: &runMock{
 				wantArgs: []string{"list", "-m"},
 				out:      "github.com/example/repo\n",
@@ -85,7 +85,7 @@ func TestModulePath(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "returns error if command fails",
+			name: "command fails",
 			runMock: &runMock{
 				wantArgs: []string{"list", "-m"},
 				out:      "",
@@ -114,7 +114,7 @@ func TestModulePath(t *testing.T) {
 	}
 }
 
-func TestGenerateCoverProfile(t *testing.T) {
+func TestClient_GenerateCoverProfile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -123,7 +123,7 @@ func TestGenerateCoverProfile(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "successfully generates and returns coverage profile path",
+			name: "valid execution",
 			runMock: &runMock{
 				wantArgs:      []string{"test", "-coverprofile=coverage.out", "./..."},
 				coverProfiles: new("dummy cover profiles"),

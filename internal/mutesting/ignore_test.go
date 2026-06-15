@@ -82,7 +82,7 @@ func TestParseIgnoreFile(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "returns error if Last-Synced-Commit header is malformed",
+			name: "malformed Last-Synced-Commit header",
 			content: `
 				# Last-Synced-Commit:
 			`,
@@ -109,7 +109,7 @@ func TestParseIgnoreFile(t *testing.T) {
 	}
 }
 
-func TestIgnore_Update(t *testing.T) {
+func TestIgnoreFile_Update(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -298,7 +298,7 @@ func TestIgnore_Update(t *testing.T) {
 	}
 }
 
-func TestIgnore_WriteIgnoreFile(t *testing.T) {
+func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {

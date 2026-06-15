@@ -125,7 +125,7 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestRegressions(t *testing.T) {
+func TestFiles_Regressions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -136,14 +136,14 @@ func TestRegressions(t *testing.T) {
 		want         []FileReport
 	}{
 		{
-			name:         "empty currentCoverage returns empty map",
+			name:         "empty currentCoverage",
 			files:        Files{},
 			baseCoverage: Files{},
 			combinedDiff: git.CombinedDiff{},
 			want:         []FileReport{},
 		},
 		{
-			name: "currentCoverage file with no lines returns empty map",
+			name: "currentCoverage file with no lines",
 			files: Files{
 				"main.go": {},
 			},
@@ -313,7 +313,7 @@ func TestRegressions(t *testing.T) {
 	}
 }
 
-func TestUncoveredAdditions(t *testing.T) {
+func TestFiles_UncoveredAdditions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -324,14 +324,14 @@ func TestUncoveredAdditions(t *testing.T) {
 		want         []FileReport
 	}{
 		{
-			name:         "empty coverage returns empty slice",
+			name:         "empty coverage",
 			files:        Files{},
 			baseCoverage: Files{},
 			combinedDiff: git.CombinedDiff{},
 			want:         []FileReport{},
 		},
 		{
-			name: "non-empty coverage with no lines returns empty slice",
+			name: "non-empty coverage with no lines",
 			files: Files{
 				"main.go": {},
 			},
@@ -487,7 +487,7 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 		want       []string
 	}{
 		{
-			name: "report with only one line returns single string",
+			name: "report with only one line",
 			files: Files{
 				"main.go": {
 					10: false,
@@ -500,7 +500,7 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 			want: []string{"10"},
 		},
 		{
-			name: "report with gap >= 1 splits the range if gap lines are covered",
+			name: "report with gap >= 1",
 			files: Files{
 				"main.go": {
 					10: false,
@@ -516,7 +516,7 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 			want: []string{"10", "12", "15"},
 		},
 		{
-			name: "report with gap == 0 bridges the range",
+			name: "report with gap == 0",
 			files: Files{
 				"main.go": {
 					10: false,
@@ -530,7 +530,7 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 			want: []string{"10-11"},
 		},
 		{
-			name: "gap == 1 with unexecutable line is bridged",
+			name: "gap == 1 with unexecutable line",
 			files: Files{
 				"main.go": {
 					9:  true,
@@ -585,12 +585,12 @@ func TestOverallPercentage(t *testing.T) {
 		want          float64
 	}{
 		{
-			name:          "empty coverProfiles returns 0.0 without panicking",
+			name:          "empty coverProfiles",
 			coverProfiles: []*cover.Profile{},
 			want:          0.0,
 		},
 		{
-			name: "profile with no blocks returns 0.0 without panicking",
+			name: "profile with no blocks",
 			coverProfiles: []*cover.Profile{
 				{
 					FileName: "github.com/example/repo/main.go",
@@ -601,7 +601,7 @@ func TestOverallPercentage(t *testing.T) {
 			want: 0.0,
 		},
 		{
-			name: "0% coverage returns 0.0",
+			name: "0% coverage",
 			coverProfiles: []*cover.Profile{
 				{
 					FileName: "github.com/example/repo/main.go",
