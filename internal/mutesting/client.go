@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/build"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -30,7 +33,19 @@ func NewClient(dir ...string) (*Client, error) {
 		var exitErr *exec.ExitError
 
 		cmd := exec.CommandContext(ctx, "go-mutesting", args...)
+		if cmd.Err != nil && errors.Is(cmd.Err, exec.ErrNotFound) {
+			if gopaths := build.Default.GOPATH; gopaths != "" {
+				gopath := filepath.SplitList(gopaths)[0]
+				mutestingPath := filepath.Join(gopath, "bin", "go-mutesting")
+				if _, err := os.Stat(mutestingPath); err == nil {
+					cmd.Path = mutestingPath
+					cmd.Err = nil
+				}
+			}
+		}
+
 		cmd.Dir = workDir
+
 		out, err := cmd.CombinedOutput()
 		if err != nil && !errors.As(err, &exitErr) {
 			return out, fmt.Errorf("go-mutesting command failed: %w", err)
