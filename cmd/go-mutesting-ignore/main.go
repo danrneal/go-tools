@@ -24,7 +24,19 @@ func main() {
 
 	flag.Parse()
 
-	if err := run(*coverProfile); err != nil {
+	// These checks are disabled since they are duplicates 1:1 of checks in gremlins.
+	disabledMutators := []string{
+		"arithmetic/assign_invert",
+		"arithmetic/assignment",
+		"arithmetic/base",
+		"arithmetic/bitwise",
+		"loop/break",
+		"conditional/negated",
+		"expression/comparison",
+		"expression/remove",
+	}
+
+	if err := run(*coverProfile, disabledMutators); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -32,7 +44,7 @@ func main() {
 
 // run orchestrates the execution of go-mutesting-ignore, syncing the workspace, evaluating test coverage,
 // and producing a mutation testing report.
-func run(coverProfile string) error {
+func run(coverProfile string, disabledMutators []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
@@ -63,12 +75,12 @@ func run(coverProfile string) error {
 		return fmt.Errorf("failed to create mutantesting client: %w", err)
 	}
 
-	mutations, err := mutestingClient.GenerateMutations(ctx)
+	mutations, err := mutestingClient.GenerateMutations(ctx, disabledMutators)
 	if err != nil {
 		return fmt.Errorf("mutesting pre-run failed: %w", err)
 	}
 
-	if err = updateIgnoreFile(ctx, gitClient, ignoreFile, mutations); err != nil {
+	if err = updateIgnoreFile(ctx, gitClient, ignoreFile, mutations, disabledMutators); err != nil {
 		return err
 	}
 
@@ -81,7 +93,7 @@ func run(coverProfile string) error {
 		return err
 	}
 
-	summary, err := mutest(ctx, mutestingClient, gitClient, worktree)
+	summary, err := mutest(ctx, mutestingClient, gitClient, worktree, disabledMutators)
 	if err != nil {
 		return err
 	}
@@ -129,13 +141,14 @@ func updateIgnoreFile(
 	gitClient *git.Client,
 	ignoreFile *mutesting.IgnoreFile,
 	mutations map[mutesting.Mutation][]string,
+	disabledMutators []string,
 ) error {
 	headIgnoreFile, err := parseHeadIgnoreFile(ctx, gitClient)
 	if err != nil {
 		return nil
 	}
 
-	headMutations, err := generateHeadMutations(ctx, gitClient)
+	headMutations, err := generateHeadMutations(ctx, gitClient, disabledMutators)
 	if err != nil {
 		return err
 	}
@@ -189,7 +202,11 @@ func parseHeadIgnoreFile(ctx context.Context, gitClient *git.Client) (*mutesting
 }
 
 // generateHeadMutations prepares a worktree for the HEAD commit and generates its mutations.
-func generateHeadMutations(ctx context.Context, gitClient *git.Client) (map[mutesting.Mutation][]string, error) {
+func generateHeadMutations(
+	ctx context.Context,
+	gitClient *git.Client,
+	disabledMutators []string,
+) (map[mutesting.Mutation][]string, error) {
 	headWorktree, cleanup, err := gitClient.CreateWorktree(ctx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup head worktree: %w", err)
@@ -202,7 +219,7 @@ func generateHeadMutations(ctx context.Context, gitClient *git.Client) (map[mute
 		return nil, fmt.Errorf("failed to create head mutant client: %w", err)
 	}
 
-	headMutations, err := headMutestingClient.GenerateMutations(ctx)
+	headMutations, err := headMutestingClient.GenerateMutations(ctx, disabledMutators)
 	if err != nil {
 		return nil, fmt.Errorf("head pre-run failed: %w", err)
 	}
@@ -259,8 +276,9 @@ func mutest(
 	mutestingClient *mutesting.Client,
 	gitClient *git.Client,
 	worktree string,
+	disabledMutators []string,
 ) (string, error) {
-	summary, err := mutestingClient.Mutest(ctx)
+	summary, err := mutestingClient.Mutest(ctx, disabledMutators)
 	if err != nil {
 		return "", fmt.Errorf("mutation testing failed: %w", err)
 	}

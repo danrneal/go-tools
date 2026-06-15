@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -63,17 +64,15 @@ func NewClient(dir ...string) (*Client, error) {
 }
 
 // Mutest runs the mutation testing process, outputting HTML results and utilizing a blacklist.
-func (c *Client) Mutest(ctx context.Context) (string, error) {
-	out, err := c.run(ctx, "--html-output", "--blacklist=go-mutesting.blacklist",
-		"--disable=arithmetic/assign_invert",
-		"--disable=arithmetic/assignment",
-		"--disable=arithmetic/base",
-		"--disable=arithmetic/bitwise",
-		"--disable=loop/break",
-		"--disable=conditional/negated",
-		"--disable=expression/comparison",
-		"./...",
-	)
+func (c *Client) Mutest(ctx context.Context, disabledMutators []string) (string, error) {
+	disableFlags := make([]string, 0, len(disabledMutators))
+	for _, disabledMutator := range disabledMutators {
+		disableFlag := fmt.Sprintf("--disable=%s", disabledMutator)
+		disableFlags = append(disableFlags, disableFlag)
+	}
+
+	args := slices.Concat(disableFlags, []string{"--html-output", "--blacklist=go-mutesting.blacklist", "./..."})
+	out, err := c.run(ctx, args...)
 	if err != nil {
 		return "", fmt.Errorf("mutation testing failed: %w\nOutput:\n%s", err, string(out))
 	}

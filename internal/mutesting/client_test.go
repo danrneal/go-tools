@@ -67,24 +67,21 @@ func TestClient_Mutest(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		runMock *runMock
-		want    string
-		wantErr bool
+		name             string
+		disabledMutators []string
+		runMock          *runMock
+		want             string
+		wantErr          bool
 	}{
 		{
-			name: "valid execution",
+			name:             "valid execution",
+			disabledMutators: []string{"foo", "bar"},
 			runMock: &runMock{
 				wantArgs: []string{
+					"--disable=foo",
+					"--disable=bar",
 					"--html-output",
 					"--blacklist=go-mutesting.blacklist",
-					"--disable=arithmetic/assign_invert",
-					"--disable=arithmetic/assignment",
-					"--disable=arithmetic/base",
-					"--disable=arithmetic/bitwise",
-					"--disable=loop/break",
-					"--disable=conditional/negated",
-					"--disable=expression/comparison",
 					"./...",
 				},
 				out: `
@@ -103,13 +100,6 @@ func TestClient_Mutest(t *testing.T) {
 				wantArgs: []string{
 					"--html-output",
 					"--blacklist=go-mutesting.blacklist",
-					"--disable=arithmetic/assign_invert",
-					"--disable=arithmetic/assignment",
-					"--disable=arithmetic/base",
-					"--disable=arithmetic/bitwise",
-					"--disable=loop/break",
-					"--disable=conditional/negated",
-					"--disable=expression/comparison",
 					"./...",
 				},
 				out: "some error output",
@@ -125,7 +115,7 @@ func TestClient_Mutest(t *testing.T) {
 			t.Parallel()
 
 			client := newMockClient(t, tt.runMock)
-			got, err := client.Mutest(context.Background())
+			got, err := client.Mutest(context.Background(), tt.disabledMutators)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Mutest() error = %v, wantErr %v", err, tt.wantErr)

@@ -17,17 +17,19 @@ func TestClient_GenerateMutations(t *testing.T) {
 	mockErr := errors.New("command failed")
 
 	tests := []struct {
-		name      string
-		runMock   *runMock
-		report    string
-		want      map[Mutation][]string
-		wantErr   bool
-		errTarget error
+		name             string
+		disabledMutators []string
+		runMock          *runMock
+		report           string
+		want             map[Mutation][]string
+		wantErr          bool
+		errTarget        error
 	}{
 		{
-			name: "success with empty escaped mutants",
+			name:             "success with empty escaped mutants",
+			disabledMutators: []string{"foo", "bar"},
 			runMock: &runMock{
-				wantArgs: []string{"--exec", "false", "./..."},
+				wantArgs: []string{"--disable=foo", "--disable=bar", "--exec", "false", "./..."},
 			},
 			report: `
 				{
@@ -113,7 +115,7 @@ func TestClient_GenerateMutations(t *testing.T) {
 			client := newMockClient(t, tt.runMock)
 			client.dir = dir
 
-			got, err := client.GenerateMutations(context.Background())
+			got, err := client.GenerateMutations(context.Background(), tt.disabledMutators)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("GenerateMutations() error = %v, wantErr %v", err, tt.wantErr)
