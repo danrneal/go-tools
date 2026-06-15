@@ -9,7 +9,7 @@ update:
 	curl -sSfL https://raw.githubusercontent.com/danrneal/go-tools/main/.golangci.yml -o .golangci.yml
 	curl -sSfL https://raw.githubusercontent.com/danrneal/go-tools/main/Makefile -o Makefile
 	@echo "==> Installing latest CLI tools..."
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest
+	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest
 	go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
 	go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
 	go install github.com/danrneal/go-tools/cmd/cover-diff@latest
