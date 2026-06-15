@@ -70,7 +70,7 @@ func ParseIgnoreFile(r io.Reader) (*IgnoreFile, error) {
 func (i *IgnoreFile) Update(
 	ignoreMutations map[Mutation]bool,
 	combinedDiff git.CombinedDiff,
-	mutations map[Mutation]string,
+	mutations map[Mutation][]string,
 	commit string,
 ) {
 	updatedMutations := map[Mutation]bool{}

@@ -30,7 +30,7 @@ type Mutation struct {
 
 // GenerateMutations executes a fast mutation testing run without executing the test suite
 // to generate the base report.json containing all potential mutations.
-func (c *Client) GenerateMutations(ctx context.Context) (map[Mutation]string, error) {
+func (c *Client) GenerateMutations(ctx context.Context) (map[Mutation][]string, error) {
 	if _, err := c.run(ctx, "--exec", "false", "./..."); err != nil {
 		return nil, fmt.Errorf("failed to run go-mutesting pre-run: %w", err)
 	}
@@ -49,11 +49,11 @@ func (c *Client) GenerateMutations(ctx context.Context) (map[Mutation]string, er
 		return nil, fmt.Errorf("failed to decode JSON report: %w", err)
 	}
 
-	mutations := map[Mutation]string{}
+	mutations := map[Mutation][]string{}
 	for _, mutant := range report.Escaped {
 		fields := strings.Fields(mutant.ProcessOutput)
 		checksum := fields[len(fields)-1]
-		mutations[mutant.Mutation] = checksum
+		mutations[mutant.Mutation] = append(mutations[mutant.Mutation], checksum)
 	}
 
 	return mutations, nil

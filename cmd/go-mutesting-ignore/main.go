@@ -128,7 +128,7 @@ func updateIgnoreFile(
 	ctx context.Context,
 	gitClient *git.Client,
 	ignoreFile *mutesting.IgnoreFile,
-	mutations map[mutesting.Mutation]string,
+	mutations map[mutesting.Mutation][]string,
 ) error {
 	headIgnoreFile, err := parseHeadIgnoreFile(ctx, gitClient)
 	if err != nil {
@@ -189,7 +189,7 @@ func parseHeadIgnoreFile(ctx context.Context, gitClient *git.Client) (*mutesting
 }
 
 // generateHeadMutations prepares a worktree for the HEAD commit and generates its mutations.
-func generateHeadMutations(ctx context.Context, gitClient *git.Client) (map[mutesting.Mutation]string, error) {
+func generateHeadMutations(ctx context.Context, gitClient *git.Client) (map[mutesting.Mutation][]string, error) {
 	headWorktree, cleanup, err := gitClient.CreateWorktree(ctx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup head worktree: %w", err)
@@ -231,16 +231,16 @@ func parseCoverProfile(ctx context.Context, goClient *golang.Client, coverProfil
 // ignore lists, and test coverage information.
 func createBlacklist(
 	ignoreFile *mutesting.IgnoreFile,
-	mutations map[mutesting.Mutation]string,
+	mutations map[mutesting.Mutation][]string,
 	fileCoverage coverage.Files,
 	worktree string,
 ) error {
 	blacklist := []string{}
-	for mutation, checksum := range mutations {
+	for mutation, checksums := range mutations {
 		if covered, ok := fileCoverage[mutation.RelPath][mutation.StartLine]; !ok || !covered {
-			blacklist = append(blacklist, checksum)
+			blacklist = append(blacklist, checksums...)
 		} else if ignoreFile.Mutations[mutation] {
-			blacklist = append(blacklist, checksum)
+			blacklist = append(blacklist, checksums...)
 		}
 	}
 

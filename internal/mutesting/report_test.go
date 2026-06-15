@@ -20,7 +20,7 @@ func TestClient_GenerateMutations(t *testing.T) {
 		name      string
 		runMock   *runMock
 		report    string
-		want      map[Mutation]string
+		want      map[Mutation][]string
 		wantErr   bool
 		errTarget error
 	}{
@@ -34,7 +34,7 @@ func TestClient_GenerateMutations(t *testing.T) {
 					"escaped": []
 				}
 			`,
-			want:    map[Mutation]string{},
+			want:    map[Mutation][]string{},
 			wantErr: false,
 		},
 		{
@@ -56,12 +56,12 @@ func TestClient_GenerateMutations(t *testing.T) {
 					]
 				}
 			`,
-			want: map[Mutation]string{
+			want: map[Mutation][]string{
 				{
 					Name:      "testMutator",
 					RelPath:   "main.go",
 					StartLine: 42,
-				}: "abcdef123",
+				}: {"abcdef123"},
 			},
 			wantErr: false,
 		},

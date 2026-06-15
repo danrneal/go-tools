@@ -117,7 +117,7 @@ func TestIgnoreFile_Update(t *testing.T) {
 		ignoreFile      *IgnoreFile
 		ignoreMutations map[Mutation]bool
 		combinedDiff    git.CombinedDiff
-		mutations       map[Mutation]string
+		mutations       map[Mutation][]string
 		commit          string
 		want            *IgnoreFile
 	}{
@@ -129,7 +129,7 @@ func TestIgnoreFile_Update(t *testing.T) {
 			},
 			ignoreMutations: map[Mutation]bool{},
 			combinedDiff:    git.CombinedDiff{},
-			mutations:       map[Mutation]string{},
+			mutations:       map[Mutation][]string{},
 			commit:          "new-commit",
 			want: &IgnoreFile{
 				LastSyncedCommit: "new-commit",
@@ -150,7 +150,7 @@ func TestIgnoreFile_Update(t *testing.T) {
 			},
 			ignoreMutations: map[Mutation]bool{},
 			combinedDiff:    git.CombinedDiff{},
-			mutations:       map[Mutation]string{},
+			mutations:       map[Mutation][]string{},
 			commit:          "new-commit",
 			want: &IgnoreFile{
 				LastSyncedCommit: "new-commit",
@@ -183,7 +183,7 @@ func TestIgnoreFile_Update(t *testing.T) {
 				}: true,
 			},
 			combinedDiff: git.CombinedDiff{},
-			mutations:    map[Mutation]string{},
+			mutations:    map[Mutation][]string{},
 			commit:       "new-commit",
 			want: &IgnoreFile{
 				LastSyncedCommit: "new-commit",
@@ -210,12 +210,12 @@ func TestIgnoreFile_Update(t *testing.T) {
 				}: true,
 			},
 			combinedDiff: git.CombinedDiff{},
-			mutations: map[Mutation]string{
+			mutations: map[Mutation][]string{
 				{
 					Name:      "branch/if",
 					RelPath:   "main.go",
 					StartLine: 10,
-				}: "checksum123",
+				}: {"checksum123"},
 			},
 			commit: "new-commit",
 			want: &IgnoreFile{
@@ -264,12 +264,12 @@ func TestIgnoreFile_Update(t *testing.T) {
 					},
 				},
 			},
-			mutations: map[Mutation]string{
+			mutations: map[Mutation][]string{
 				{
 					Name:      "branch/if",
 					RelPath:   "new_main.go",
 					StartLine: 12,
-				}: "checksum123",
+				}: {"checksum123"},
 			},
 			commit: "new-commit",
 			want: &IgnoreFile{
