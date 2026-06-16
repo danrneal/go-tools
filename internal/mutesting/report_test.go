@@ -29,7 +29,8 @@ func TestClient_GenerateMutations(t *testing.T) {
 			name:             "success with empty escaped mutants",
 			disabledMutators: []string{"foo", "bar"},
 			runMock: &runMock{
-				wantArgs: []string{"--disable=foo", "--disable=bar", "--exec", "false", "./..."},
+				wantEnv:  []string{"PATH", "GO_BIN"},
+				wantArgs: []string{"--disable=foo", "--disable=bar", "./..."},
 			},
 			report: `
 				{
@@ -42,7 +43,8 @@ func TestClient_GenerateMutations(t *testing.T) {
 		{
 			name: "success with populated escaped mutants",
 			runMock: &runMock{
-				wantArgs: []string{"--exec", "false", "./..."},
+				wantEnv:  []string{"PATH", "GO_BIN"},
+				wantArgs: []string{"./..."},
 			},
 			report: `
 				{
@@ -70,7 +72,8 @@ func TestClient_GenerateMutations(t *testing.T) {
 		{
 			name: "go-mutesting pre-run fails",
 			runMock: &runMock{
-				wantArgs: []string{"--exec", "false", "./..."},
+				wantEnv:  []string{"PATH", "GO_BIN"},
+				wantArgs: []string{"./..."},
 				err:      mockErr,
 			},
 			report:    "",
@@ -81,7 +84,8 @@ func TestClient_GenerateMutations(t *testing.T) {
 		{
 			name: "report.json is missing",
 			runMock: &runMock{
-				wantArgs: []string{"--exec", "false", "./..."},
+				wantEnv:  []string{"PATH", "GO_BIN"},
+				wantArgs: []string{"./..."},
 			},
 			report:    "",
 			want:      nil,
@@ -91,7 +95,8 @@ func TestClient_GenerateMutations(t *testing.T) {
 		{
 			name: "JSON decoding fails",
 			runMock: &runMock{
-				wantArgs: []string{"--exec", "false", "./..."},
+				wantEnv:  []string{"PATH", "GO_BIN"},
+				wantArgs: []string{"./..."},
 			},
 			report:  `{ "invalid": json }`,
 			want:    nil,

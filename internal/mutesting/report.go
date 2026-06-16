@@ -32,15 +32,22 @@ type Mutation struct {
 // GenerateMutations executes a fast mutation testing run without executing the test suite
 // to generate the base report.json containing all potential mutations.
 func (c *Client) GenerateMutations(ctx context.Context, disabledMutators []string) (map[Mutation][]string, error) {
+	env, cleanup, err := setupGoTestWrapper("exit 0")
+	if err != nil {
+		return nil, err
+	}
+
+	defer cleanup()
+
 	disableFlags := make([]string, 0, len(disabledMutators))
 	for _, disabledMutator := range disabledMutators {
 		disableFlag := fmt.Sprintf("--disable=%s", disabledMutator)
 		disableFlags = append(disableFlags, disableFlag)
 	}
 
-	args := slices.Concat(disableFlags, []string{"--exec", "false", "./..."})
+	args := slices.Concat(disableFlags, []string{"./..."})
 
-	if _, err := c.run(ctx, args...); err != nil {
+	if _, err = c.run(ctx, env, args...); err != nil {
 		return nil, fmt.Errorf("failed to run go-mutesting pre-run: %w", err)
 	}
 

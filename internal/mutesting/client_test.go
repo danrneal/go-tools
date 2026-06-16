@@ -10,6 +10,7 @@ import (
 )
 
 type runMock struct {
+	wantEnv  []string
 	wantArgs []string
 	out      string
 	err      error
@@ -77,6 +78,7 @@ func TestClient_Mutest(t *testing.T) {
 			name:             "valid execution",
 			disabledMutators: []string{"foo", "bar"},
 			runMock: &runMock{
+				wantEnv: []string{"PATH", "GO_BIN"},
 				wantArgs: []string{
 					"--disable=foo",
 					"--disable=bar",
@@ -97,6 +99,7 @@ func TestClient_Mutest(t *testing.T) {
 		{
 			name: "command fails",
 			runMock: &runMock{
+				wantEnv: []string{"PATH", "GO_BIN"},
 				wantArgs: []string{
 					"--html-output",
 					"--blacklist=go-mutesting.blacklist",
@@ -131,7 +134,17 @@ func TestClient_Mutest(t *testing.T) {
 func newMockClient(t *testing.T, runMock *runMock) *Client {
 	t.Helper()
 
-	run := func(ctx context.Context, args ...string) ([]byte, error) {
+	run := func(ctx context.Context, env []string, args ...string) ([]byte, error) {
+		gotEnv := make([]string, 0, len(env))
+		for _, envVar := range env {
+			gotEnvVar := strings.Split(envVar, "=")[0]
+			gotEnv = append(gotEnv, gotEnvVar)
+		}
+
+		if diff := cmp.Diff(runMock.wantEnv, gotEnv); diff != "" {
+			t.Errorf("runMock env mismatch (-want +got):\n%s", diff)
+		}
+
 		if diff := cmp.Diff(runMock.wantArgs, args); diff != "" {
 			t.Errorf("runMock args mismatch (-want +got):\n%s", diff)
 		}
