@@ -325,13 +325,13 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 				Mutations: map[Mutation]bool{
 					{
 						Name:      "b_mutator",
-						RelPath:   "main.go",
-						StartLine: 10,
+						RelPath:   "internal/file.go",
+						StartLine: 20,
 					}: true,
 					{
-						Name:      "a_mutator",
+						Name:      "c_mutator",
 						RelPath:   "main.go",
-						StartLine: 20,
+						StartLine: 30,
 					}: true,
 					{
 						Name:      "a_mutator",
@@ -340,8 +340,8 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 					}: true,
 					{
 						Name:      "mutator",
-						RelPath:   "internal/file.go",
-						StartLine: 20,
+						RelPath:   "main.go",
+						StartLine: 10,
 					}: true,
 				},
 			},
@@ -349,10 +349,10 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 				# Last-Synced-Commit: a1b2c3d4e5f6
 				# format: filepath:line:mutatorName
 
-				internal/file.go:20:mutator
+				internal/file.go:20:b_mutator
 				main.go:10:a_mutator
-				main.go:10:b_mutator
-				main.go:20:a_mutator
+				main.go:10:mutator
+				main.go:30:c_mutator
 			`,
 		},
 	}
@@ -370,6 +370,47 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 			gotOut := buf.String()
 			if gotOut != trimIndent(tt.wantOut) {
 				t.Errorf("Ignore.WriteIgnoreFile() got = %v, want %v", gotOut, trimIndent(tt.wantOut))
+			}
+		})
+	}
+}
+
+func Test_compareMutation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		a    Mutation
+		b    Mutation
+		want int
+	}{
+		{
+			name: "different path",
+			a:    Mutation{RelPath: "a.go", StartLine: 10, Name: "mut"},
+			b:    Mutation{RelPath: "b.go", StartLine: 10, Name: "mut"},
+			want: -1,
+		},
+		{
+			name: "different start line",
+			a:    Mutation{RelPath: "a.go", StartLine: 20, Name: "mut"},
+			b:    Mutation{RelPath: "a.go", StartLine: 10, Name: "mut"},
+			want: 1,
+		},
+		{
+			name: "different name",
+			a:    Mutation{RelPath: "a.go", StartLine: 10, Name: "a_mut"},
+			b:    Mutation{RelPath: "a.go", StartLine: 10, Name: "b_mut"},
+			want: -1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := compareMutation(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("compareMutation() = %v, want %v", got, tt.want)
 			}
 		})
 	}

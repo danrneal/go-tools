@@ -6,8 +6,8 @@ fast: lint test build coverage clean
 
 update:
 	@echo "==> Updating tooling configurations from danrneal/go-tools..."
-	curl -sSfL https://raw.githubusercontent.com/danrneal/go-tools/main/.golangci.yml -o .golangci.yml
-	curl -sSfL https://raw.githubusercontent.com/danrneal/go-tools/main/Makefile -o Makefile
+	curl -sSfL -z .golangci.yml https://raw.githubusercontent.com/danrneal/go-tools/main/.golangci.yml -o .golangci.yml
+	curl -sSfL -z Makefile https://raw.githubusercontent.com/danrneal/go-tools/main/Makefile -o Makefile
 	@echo "==> Installing latest CLI tools..."
 	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest
 	go install github.com/go-gremlins/gremlins/cmd/gremlins@latest

@@ -105,17 +105,7 @@ func (i *IgnoreFile) WriteIgnoreFile(w io.Writer) error {
 	}
 
 	mutations := slices.Collect(maps.Keys(i.Mutations))
-	slices.SortFunc(mutations, func(a, b Mutation) int {
-		if c := cmp.Compare(a.RelPath, b.RelPath); c != 0 {
-			return c
-		}
-
-		if c := cmp.Compare(a.StartLine, b.StartLine); c != 0 {
-			return c
-		}
-
-		return cmp.Compare(a.Name, b.Name)
-	})
+	slices.SortFunc(mutations, compareMutation)
 
 	for _, mutation := range mutations {
 		if _, err := fmt.Fprintf(w, "%s:%d:%s\n", mutation.RelPath, mutation.StartLine, mutation.Name); err != nil {
@@ -124,4 +114,16 @@ func (i *IgnoreFile) WriteIgnoreFile(w io.Writer) error {
 	}
 
 	return nil
+}
+
+func compareMutation(a, b Mutation) int {
+	if c := cmp.Compare(a.RelPath, b.RelPath); c != 0 {
+		return c
+	}
+
+	if c := cmp.Compare(a.StartLine, b.StartLine); c != 0 {
+		return c
+	}
+
+	return cmp.Compare(a.Name, b.Name)
 }

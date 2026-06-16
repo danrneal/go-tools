@@ -3,6 +3,8 @@ package mutesting
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"os"
 	"strings"
 	"testing"
 
@@ -127,6 +129,21 @@ func TestClient_Mutest(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("Mutest() got = %v, want %v", got, tt.want)
 			}
+
+			for _, envVar := range tt.runMock.wantEnv {
+				path, ok := strings.CutPrefix(envVar, "PATH=")
+				if !ok {
+					continue
+				}
+
+				goTestWrapperDir := strings.Split(path, ":")[0]
+				if _, err := os.Stat(goTestWrapperDir); err == nil || !errors.Is(err, fs.ErrNotExist) {
+					t.Errorf(
+						"expected go test wrapper directory %s to be deleted by cleanup(), but it exists",
+						goTestWrapperDir,
+					)
+				}
+			}
 		})
 	}
 }
@@ -220,6 +237,8 @@ func newMockClient(t *testing.T, runMock *runMock) *Client {
 		if diff := cmp.Diff(runMock.wantEnv, gotEnv); diff != "" {
 			t.Errorf("runMock env mismatch (-want +got):\n%s", diff)
 		}
+
+		runMock.wantEnv = env
 
 		if diff := cmp.Diff(runMock.wantArgs, args); diff != "" {
 			t.Errorf("runMock args mismatch (-want +got):\n%s", diff)
