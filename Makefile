@@ -5,6 +5,9 @@ all: update lint test build coverage gremlins go-mutesting clean
 fast: lint test build coverage clean
 
 update:
+	@echo "==> Upgrading Go version..."
+	go get go@latest
+	go mod tidy
 	@echo "==> Updating tooling configurations from danrneal/go-tools..."
 	curl -sSfL -z .golangci.yml https://raw.githubusercontent.com/danrneal/go-tools/main/.golangci.yml -o .golangci.yml
 	curl -sSfL -z Makefile https://raw.githubusercontent.com/danrneal/go-tools/main/Makefile -o Makefile
