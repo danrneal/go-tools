@@ -13,6 +13,7 @@ import (
 	"github.com/danrneal/go-tools/internal/git"
 	"github.com/danrneal/go-tools/internal/golang"
 	"github.com/danrneal/go-tools/internal/mutesting"
+	"github.com/schollz/progressbar/v3"
 	"golang.org/x/tools/cover"
 )
 
@@ -47,6 +48,8 @@ func main() {
 func run(coverProfile string, disabledMutators []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
+
+	progressBar := newProgressBar()
 
 	gitClient, err := git.NewClient()
 	if err != nil {
@@ -89,8 +92,22 @@ func run(coverProfile string, disabledMutators []string) error {
 		return err
 	}
 
-	if err = createBlacklist(ignoreFile, mutations, fileCoverage, worktree); err != nil {
+	blacklist, err := createBlacklist(ignoreFile, mutations, fileCoverage, worktree)
+	if err != nil {
 		return err
+	}
+
+	totalChecksums := 0
+	for _, checksums := range mutations {
+		totalChecksums += len(checksums)
+	}
+
+	progressBar.Describe("Testing mutations...")
+	progressBar.ChangeMax(totalChecksums - len(blacklist))
+	progressbar.OptionShowCount()(progressBar)
+
+	mutestingClient.OnProgress = func(progress int) {
+		_ = progressBar.Add(progress)
 	}
 
 	summary, err := mutest(ctx, mutestingClient, gitClient, worktree, disabledMutators)
@@ -98,9 +115,27 @@ func run(coverProfile string, disabledMutators []string) error {
 		return err
 	}
 
+	fmt.Fprintln(os.Stdout)
 	fmt.Fprintln(os.Stdout, summary)
 
 	return nil
+}
+
+// newProgressBar initializes and returns a progress bar configured for mutation testing.
+func newProgressBar() *progressbar.ProgressBar {
+	progressBarTheme := progressbar.ThemeDefault
+	progressBarTheme.BarEnd = "| [Elapsed:ETA]"
+	progressBarTheme.BarEndFilled = "|"
+
+	progressBarOpts := []progressbar.Option{
+		progressbar.OptionSetDescription("Generating mutations..."),
+		progressbar.OptionSetTheme(progressBarTheme),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+	}
+
+	progressBar := progressbar.NewOptions(-1, progressBarOpts...)
+
+	return progressBar
 }
 
 // parseIgnoreFile opens and parses the dirty ignore file from the current working directory.
@@ -251,7 +286,7 @@ func createBlacklist(
 	mutations map[mutesting.Mutation][]string,
 	fileCoverage coverage.Files,
 	worktree string,
-) error {
+) ([]string, error) {
 	blacklist := []string{}
 	for mutation, checksums := range mutations {
 		if covered, ok := fileCoverage[mutation.RelPath][mutation.StartLine]; !ok || !covered {
@@ -264,10 +299,10 @@ func createBlacklist(
 	blacklistData := []byte(strings.Join(blacklist, "\n"))
 	blacklistPath := filepath.Join(worktree, "go-mutesting.blacklist")
 	if err := os.WriteFile(blacklistPath, blacklistData, 0o600); err != nil {
-		return fmt.Errorf("failed to write blacklist: %w", err)
+		return nil, fmt.Errorf("failed to write blacklist: %w", err)
 	}
 
-	return nil
+	return blacklist, nil
 }
 
 // mutest executes the mutation testing command on the target worktree and fetches the summary report.

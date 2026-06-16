@@ -1,10 +1,12 @@
 package mutesting
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"go/build"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,8 +16,9 @@ import (
 
 // Client provides a mockable interface for executing go-mutesting commands.
 type Client struct {
-	dir string
-	run func(ctx context.Context, env []string, args ...string) ([]byte, error)
+	dir        string
+	run        func(ctx context.Context, env []string, args ...string) ([]byte, error)
+	OnProgress func(int)
 }
 
 // NewClient initializes a new Mutant Client. It optionally accepts a single directory
@@ -28,6 +31,10 @@ func NewClient(dir ...string) (*Client, error) {
 	workDir := ""
 	if len(dir) > 0 {
 		workDir = dir[0]
+	}
+
+	client := &Client{
+		dir: workDir,
 	}
 
 	run := func(ctx context.Context, env []string, args ...string) ([]byte, error) {
@@ -45,10 +52,18 @@ func NewClient(dir ...string) (*Client, error) {
 			}
 		}
 
+		var buf bytes.Buffer
+		progressWriter := &progressWriter{
+			onProgress: client.OnProgress,
+		}
+
 		cmd.Env = append(os.Environ(), env...)
 		cmd.Dir = workDir
+		cmd.Stdout = io.MultiWriter(&buf, progressWriter)
+		cmd.Stderr = io.MultiWriter(&buf, progressWriter)
 
-		out, err := cmd.CombinedOutput()
+		err := cmd.Run()
+		out := buf.Bytes()
 		if err != nil && !errors.As(err, &exitErr) {
 			return out, fmt.Errorf("go-mutesting command failed: %w", err)
 		}
@@ -56,10 +71,7 @@ func NewClient(dir ...string) (*Client, error) {
 		return out, nil
 	}
 
-	client := &Client{
-		dir: workDir,
-		run: run,
-	}
+	client.run = run
 
 	return client, nil
 }
@@ -91,6 +103,11 @@ func (c *Client) Mutest(ctx context.Context, disabledMutators []string) (string,
 	return summary, nil
 }
 
+// setupGoTestWrapper creates a temporary directory containing an executable 'go' shell script.
+// It intercepts calls to 'go test' and executes the provided goTestLogic instead.
+// All other 'go' commands are passed through untouched to the real go binary.
+// It returns a custom environment slice that prepends this directory to PATH and injects GO_BIN,
+// along with a cleanup function that must be deferred by the caller.
 func setupGoTestWrapper(goTestLogic string) ([]string, func(), error) {
 	goBin, err := exec.LookPath("go")
 	if err != nil {
@@ -127,4 +144,23 @@ func setupGoTestWrapper(goTestLogic string) ([]string, func(), error) {
 	}
 
 	return env, cleanup, nil
+}
+
+// progressWriter is a custom [io.Writer] that scans the output stream for mutation completions
+// and triggers the OnProgress callback.
+type progressWriter struct {
+	onProgress func(int)
+}
+
+// Write scans the incoming byte slice for the "checksum" keyword, which go-mutesting outputs
+// exactly once per evaluated mutation, and triggers the callback with the count.
+func (pw *progressWriter) Write(p []byte) (int, error) {
+	if pw.onProgress != nil {
+		progress := bytes.Count(p, []byte("checksum"))
+		if progress > 0 {
+			pw.onProgress(progress)
+		}
+	}
+
+	return len(p), nil
 }

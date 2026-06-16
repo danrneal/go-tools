@@ -131,6 +131,82 @@ func TestClient_Mutest(t *testing.T) {
 	}
 }
 
+func TestProgressWriter_Write(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		p               string
+		onProgress      func(int)
+		onProgressCalls int
+		wantProgress    int
+	}{
+		{
+			name:         "nil onProgress callback does not panic",
+			p:            "some output with checksum to ensure it processes safely",
+			onProgress:   nil,
+			wantProgress: 0,
+		},
+		{
+			name:            "no checksums present",
+			p:               "PASS \"arithmetic/assign_invert\" for \"file.go:10\"\n",
+			onProgress:      func(int) {},
+			onProgressCalls: 0,
+			wantProgress:    0,
+		},
+		{
+			name:            "single checksum",
+			p:               "some output\nchecksum: abcdef123\nmore output",
+			onProgress:      func(int) {},
+			onProgressCalls: 1,
+			wantProgress:    1,
+		},
+		{
+			name:            "multiple checksums in one chunk",
+			p:               "checksum: 123\nchecksum: 456\nchecksum: 789",
+			onProgress:      func(int) {},
+			onProgressCalls: 1,
+			wantProgress:    3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var gotProgress, gotOnProgressCalls int
+			if tt.onProgress != nil {
+				tt.onProgress = func(progress int) {
+					gotProgress += progress
+					gotOnProgressCalls++
+				}
+			}
+
+			pw := &progressWriter{
+				onProgress: tt.onProgress,
+			}
+
+			inputBytes := []byte(tt.p)
+			n, err := pw.Write(inputBytes)
+			if err != nil {
+				t.Fatalf("Write() unexpected error: %v", err)
+			}
+
+			if n != len(inputBytes) {
+				t.Errorf("Write() returned n=%d, want %d", n, len(inputBytes))
+			}
+
+			if gotProgress != tt.wantProgress {
+				t.Errorf("onProgress callback invoked for %d progress, want %d progress", gotProgress, tt.wantProgress)
+			}
+
+			if gotOnProgressCalls != tt.onProgressCalls {
+				t.Errorf("onProgress called %d times, want %d times", gotOnProgressCalls, tt.onProgressCalls)
+			}
+		})
+	}
+}
+
 func newMockClient(t *testing.T, runMock *runMock) *Client {
 	t.Helper()
 
