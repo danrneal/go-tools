@@ -178,8 +178,25 @@ func updateIgnoreFile(
 	mutations map[mutesting.Mutation][]string,
 	disabledMutators []string,
 ) error {
+	head, err := gitClient.Head(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD: %w", err)
+	}
+
+	file, err := os.Create(ignoreFilename)
+	if err != nil {
+		return fmt.Errorf("failed to open ignore file for writing: %w", err)
+	}
+
+	defer file.Close()
+
 	headIgnoreFile, err := parseHeadIgnoreFile(ctx, gitClient)
 	if err != nil {
+		ignoreFile.Update(nil, git.CombinedDiff{}, mutations, head)
+		if err = ignoreFile.WriteIgnoreFile(file); err != nil {
+			return fmt.Errorf("failed to save updated ignore file: %w", err)
+		}
+
 		return nil
 	}
 
@@ -197,18 +214,6 @@ func updateIgnoreFile(
 	if err != nil {
 		return fmt.Errorf("failed to get ${LAST_SYNCED_COMMIT}...HEAD diffs: %w", err)
 	}
-
-	head, err := gitClient.Head(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get HEAD: %w", err)
-	}
-
-	file, err := os.Create(ignoreFilename)
-	if err != nil {
-		return fmt.Errorf("failed to open ignore file for writing: %w", err)
-	}
-
-	defer file.Close()
 
 	ignoreFile.Update(headIgnoreFile.Mutations, headCombinedDiff, headMutations, head)
 	if err = ignoreFile.WriteIgnoreFile(file); err != nil {
