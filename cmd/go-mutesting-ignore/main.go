@@ -129,6 +129,7 @@ func newProgressBar() *progressbar.ProgressBar {
 
 	progressBarOpts := []progressbar.Option{
 		progressbar.OptionSetDescription("Generating mutations..."),
+		progressbar.OptionSetRenderBlankState(true),
 		progressbar.OptionSetTheme(progressBarTheme),
 		progressbar.OptionShowElapsedTimeOnFinish(),
 	}
