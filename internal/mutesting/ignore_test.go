@@ -1,8 +1,11 @@
 package mutesting
 
 import (
-	"bytes"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/danrneal/go-tools/internal/git"
@@ -304,10 +307,14 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 	tests := []struct {
 		name       string
 		ignoreFile *IgnoreFile
+		path       string
 		wantOut    string
+		wantErr    bool
+		errTarget  error
 	}{
 		{
 			name: "empty mutations writes only headers",
+			path: ".test-ignore",
 			ignoreFile: &IgnoreFile{
 				LastSyncedCommit: "a1b2c3d4e5f6",
 				Mutations:        map[Mutation]bool{},
@@ -320,6 +327,7 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 		},
 		{
 			name: "populated mutations are sorted by path, line, then name",
+			path: ".test-ignore",
 			ignoreFile: &IgnoreFile{
 				LastSyncedCommit: "a1b2c3d4e5f6",
 				Mutations: map[Mutation]bool{
@@ -355,19 +363,42 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 				main.go:30:c_mutator
 			`,
 		},
+		{
+			name: "returns error when file creation fails",
+			path: "",
+			ignoreFile: &IgnoreFile{
+				LastSyncedCommit: "a1b2c3d4e5f6",
+			},
+			wantErr:   true,
+			errTarget: syscall.EISDIR,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var buf bytes.Buffer
-			err := tt.ignoreFile.WriteIgnoreFile(&buf)
-			if err != nil {
-				t.Fatalf("unexpected error writing ignore file: %v", err)
+			path := filepath.Join(t.TempDir(), tt.path)
+
+			err := tt.ignoreFile.WriteIgnoreFile(path)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("WriteIgnoreFile() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			gotOut := buf.String()
+			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
+				t.Errorf("WriteIgnoreFile() error = %v, does not match target %v", err, tt.errTarget)
+			}
+
+			if tt.wantErr {
+				return
+			}
+
+			out, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("failed to read test ignore file: %v", err)
+			}
+
+			gotOut := string(out)
 			if gotOut != trimIndent(tt.wantOut) {
 				t.Errorf("Ignore.WriteIgnoreFile() got = %v, want %v", gotOut, trimIndent(tt.wantOut))
 			}

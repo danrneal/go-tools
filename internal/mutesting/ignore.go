@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -95,12 +96,19 @@ func (i *IgnoreFile) Update(
 
 // WriteIgnoreFile writes the updated ignore configuration, including the commit header and sorted mutations,
 // to the specified writer.
-func (i *IgnoreFile) WriteIgnoreFile(w io.Writer) error {
-	if _, err := fmt.Fprintf(w, "# Last-Synced-Commit: %s\n", i.LastSyncedCommit); err != nil {
+func (i *IgnoreFile) WriteIgnoreFile(path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to open ignore file for writing: %w", err)
+	}
+
+	defer file.Close()
+
+	if _, err := fmt.Fprintf(file, "# Last-Synced-Commit: %s\n", i.LastSyncedCommit); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 
-	if _, err := io.WriteString(w, "# format: filepath:line:mutatorName\n\n"); err != nil {
+	if _, err := file.WriteString("# format: filepath:line:mutatorName\n\n"); err != nil {
 		return fmt.Errorf("failed to write format instruction: %w", err)
 	}
 
@@ -108,7 +116,7 @@ func (i *IgnoreFile) WriteIgnoreFile(w io.Writer) error {
 	slices.SortFunc(mutations, compareMutation)
 
 	for _, mutation := range mutations {
-		if _, err := fmt.Fprintf(w, "%s:%d:%s\n", mutation.RelPath, mutation.StartLine, mutation.Name); err != nil {
+		if _, err := fmt.Fprintf(file, "%s:%d:%s\n", mutation.RelPath, mutation.StartLine, mutation.Name); err != nil {
 			return fmt.Errorf("failed to write mutation: %w", err)
 		}
 	}
