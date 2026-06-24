@@ -57,6 +57,7 @@ linters:
     - gomoddirectives
     - goprintffuncname
     - gosec
+    - gosmopolitan
     - govet
     - iface
     - inamedparam
