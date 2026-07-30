@@ -500,7 +500,23 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 			want: []string{"10"},
 		},
 		{
-			name: "report with gap >= 1",
+			name: "report with gap >= 3",
+			files: Files{
+				"main.go": {
+					10: false,
+					11: true,
+					12: false,
+					16: false,
+				},
+			},
+			fileReport: FileReport{
+				RelPath: "main.go",
+				Lines:   []int{10, 12, 16},
+			},
+			want: []string{"10", "12", "16"},
+		},
+		{
+			name: "gap == 2 with unexecutable lines",
 			files: Files{
 				"main.go": {
 					10: false,
@@ -513,37 +529,22 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 				RelPath: "main.go",
 				Lines:   []int{10, 12, 15},
 			},
-			want: []string{"10", "12", "15"},
+			want: []string{"10", "12-15"},
 		},
 		{
-			name: "report with gap == 0",
+			name: "gap == 2 with covered second line",
 			files: Files{
 				"main.go": {
 					10: false,
-					11: false,
-				},
-			},
-			fileReport: FileReport{
-				RelPath: "main.go",
-				Lines:   []int{10, 11},
-			},
-			want: []string{"10-11"},
-		},
-		{
-			name: "gap == 1 with unexecutable line",
-			files: Files{
-				"main.go": {
-					9:  true,
-					10: false,
-					12: false,
+					12: true,
 					13: false,
 				},
 			},
 			fileReport: FileReport{
 				RelPath: "main.go",
-				Lines:   []int{10, 12, 13},
+				Lines:   []int{10, 13},
 			},
-			want: []string{"10-13"},
+			want: []string{"10", "13"},
 		},
 		{
 			name: "ends with bridged range",

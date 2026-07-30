@@ -11,6 +11,10 @@ import (
 	"golang.org/x/tools/cover"
 )
 
+// maxGapSize defines the maximum number of consecutive unexecutable lines
+// (like blank lines or closing braces) that can be bridged into a single line range.
+const maxGapSize = 2
+
 // Files represents line-by-line test coverage across multiple files.
 // The outer map key is the relative file path. The inner map key is the
 // line number, and the boolean value indicates whether that line was executed.
@@ -140,22 +144,26 @@ func (f Files) UncoveredAdditions(baseCoverage Files, combinedDiff git.CombinedD
 }
 
 // FormatLineRanges groups consecutive line numbers into strings (e.g., "30-35").
-// It intelligently bridges a 1-line gap if the missing line is unexecutable
-// (like a blank line or closing brace), but splits the range if the gap line is covered.
+// It intelligently bridges up to a 2-line gap if the missing lines are unexecutable
+// (like blank lines or closing braces), but splits the range if any gap line is covered.
 func (f Files) FormatLineRanges(fileReport FileReport) []string {
 	fileLineRanges := []string{}
 
 	fileCoverage := f[fileReport.RelPath]
 	startLine := fileReport.Lines[0]
 	prevLine := startLine
-	for _, line := range fileReport.Lines[1:] {
+	for _, line := range fileReport.Lines {
 		gap := line - prevLine - 1
-		if gap == 0 {
-			prevLine = line
-			continue
-		} else if gap == 1 && !fileCoverage[prevLine+1] {
-			prevLine = line
-			continue
+		if gap <= maxGapSize {
+			canBridge := true
+			for i := range gap {
+				canBridge = canBridge && !fileCoverage[prevLine+i+1]
+			}
+
+			if canBridge {
+				prevLine = line
+				continue
+			}
 		}
 
 		if startLine == prevLine {
