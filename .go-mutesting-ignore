@@ -1,4 +1,4 @@
-# Last-Synced-Commit: 8267b2275d21e443e4b05e66eccc77fa1c33fafa
+# Last-Synced-Commit: 5e2042f536274be8bc54baa72f39486b33747f99
 # format: filepath:line:mutatorName
 
-internal/coverage/coverage.go:66:branch/if
+internal/coverage/coverage.go:70:branch/if

@@ -59,22 +59,27 @@ func (c *Client) SyncDirtyFiles(ctx context.Context, worktree string) error {
 	fields := strings.Split(status, "\x00")
 	for i := 0; i < len(fields)-1; i++ {
 		field := fields[i]
-		status, relPath := field[:2], field[3:]
+
+		indexStatus, worktreeStatus, relPath := field[0], field[1], field[3:]
 		filePath := filepath.Join(worktree, relPath)
 
+		hasStatus := func(s byte) bool {
+			return indexStatus == s || worktreeStatus == s
+		}
+
 		switch {
-		case strings.Contains(status, "D"):
+		case hasStatus('D'):
 			if err = os.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("failed to delete %s: %w", filePath, err)
 			}
-		case strings.Contains(status, "R"):
+		case hasStatus('R'):
 			oldFilePath := filepath.Join(worktree, fields[i+1])
 			if err = os.Remove(oldFilePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("failed to delete %s: %w", filePath, err)
 			}
 
 			fallthrough
-		case strings.Contains(status, "C"):
+		case hasStatus('C'):
 			i++
 			fallthrough
 		default:
