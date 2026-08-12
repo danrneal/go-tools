@@ -15,7 +15,7 @@ import (
 
 func main() {
 	coverProfile := flag.String("coverprofile", "coverage.out", "Path to current coverage profile")
-	baseCommit := flag.String("base", "main", "Base branch or commit to compare against")
+	baseCommit := flag.String("base", "HEAD", "Base branch or commit to compare against")
 
 	flag.Parse()
 
