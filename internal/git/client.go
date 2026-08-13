@@ -47,6 +47,19 @@ func NewClient(dir ...string) (*Client, error) {
 	return client, nil
 }
 
+// LastCommit executes `git log -1 --format=%H -- <relPath>` and returns the
+// hash of the commit that most recently modified the specified file.
+func (c *Client) LastCommit(ctx context.Context, relPath string) (string, error) {
+	out, err := c.run(ctx, "log", "-1", "--format=%H", "--", relPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to run git log: %w", err)
+	}
+
+	commitHash := strings.TrimSpace(string(out))
+
+	return commitHash, nil
+}
+
 // Show executes `git show` for a specific commit and file path, returning the output as an [io.Reader].
 func (c *Client) Show(ctx context.Context, commit, relPath string) (io.Reader, error) {
 	out, err := c.run(ctx, "show", fmt.Sprintf("%s:%s", commit, relPath))
@@ -57,19 +70,6 @@ func (c *Client) Show(ctx context.Context, commit, relPath string) (io.Reader, e
 	reader := bytes.NewReader(out)
 
 	return reader, nil
-}
-
-// Head executes `git rev-parse HEAD` and returns the full commit hash
-// of the current HEAD.
-func (c *Client) Head(ctx context.Context) (string, error) {
-	out, err := c.run(ctx, "rev-parse", "HEAD")
-	if err != nil {
-		return "", fmt.Errorf("failed to run git rev-parse HEAD: %w", err)
-	}
-
-	head := strings.TrimSpace(string(out))
-
-	return head, nil
 }
 
 // status executes `git status -z` and returns the raw null-terminated output string.

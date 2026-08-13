@@ -83,7 +83,7 @@ func run(coverProfile string, disabledMutators []string) error {
 		return fmt.Errorf("mutesting pre-run failed: %w", err)
 	}
 
-	if err = updateIgnoreFile(ctx, gitClient, ignoreFile, mutations, disabledMutators); err != nil {
+	if err = updateIgnoreFile(ctx, gitClient, ignoreFile, mutations); err != nil {
 		return err
 	}
 
@@ -177,16 +177,10 @@ func updateIgnoreFile(
 	gitClient *git.Client,
 	ignoreFile *mutesting.IgnoreFile,
 	mutations map[mutesting.Mutation][]string,
-	disabledMutators []string,
 ) error {
-	head, err := gitClient.Head(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get HEAD: %w", err)
-	}
-
-	headIgnoreFile, err := parseHeadIgnoreFile(ctx, gitClient)
-	if err != nil {
-		ignoreFile.Update(nil, git.CombinedDiff{}, mutations, head)
+	lastCommit, err := gitClient.LastCommit(ctx, ignoreFilename)
+	if err != nil || lastCommit == "" {
+		ignoreFile.Filter(mutations)
 		if err = ignoreFile.WriteIgnoreFile(ignoreFilename); err != nil {
 			return fmt.Errorf("failed to save updated ignore file: %w", err)
 		}
@@ -194,71 +188,54 @@ func updateIgnoreFile(
 		return nil
 	}
 
-	headMutations, err := generateHeadMutations(ctx, gitClient, disabledMutators)
+	lastCommitIgnoreFile, err := parseIgnoreFileAtCommit(ctx, gitClient, lastCommit)
 	if err != nil {
 		return err
 	}
+
+	lastCommitCombinedDiff, err := gitClient.Diff(ctx, lastCommit, "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to get ${LAST_SYNCED_COMMIT}...HEAD diffs: %w", err)
+	}
+
+	lastCommitIgnoreFile.Shift(lastCommitCombinedDiff)
 
 	combinedDiff, err := gitClient.Diff(ctx, "HEAD")
 	if err != nil {
 		return fmt.Errorf("failed to get HEAD...Dirty diffs: %w", err)
 	}
 
-	headCombinedDiff, err := gitClient.Diff(ctx, headIgnoreFile.LastSyncedCommit, "HEAD")
-	if err != nil {
-		return fmt.Errorf("failed to get ${LAST_SYNCED_COMMIT}...HEAD diffs: %w", err)
+	lastCommitIgnoreFile.Shift(combinedDiff)
+
+	for mutation := range ignoreFile.Mutations {
+		if !lastCommitIgnoreFile.Mutations[mutation] {
+			lastCommitIgnoreFile.Mutations[mutation] = true
+		}
 	}
 
-	ignoreFile.Update(headIgnoreFile.Mutations, headCombinedDiff, headMutations, head)
+	lastCommitIgnoreFile.Filter(mutations)
+
+	*ignoreFile = *lastCommitIgnoreFile
 	if err = ignoreFile.WriteIgnoreFile(ignoreFilename); err != nil {
 		return fmt.Errorf("failed to save updated ignore file: %w", err)
 	}
 
-	headIgnoreFile.Update(headIgnoreFile.Mutations, headCombinedDiff, headMutations, head)
-	ignoreFile.Update(headIgnoreFile.Mutations, combinedDiff, mutations, "")
-
 	return nil
 }
 
-// parseHeadIgnoreFile retrieves and parses the ignore file from the HEAD commit.
-func parseHeadIgnoreFile(ctx context.Context, gitClient *git.Client) (*mutesting.IgnoreFile, error) {
-	file, err := gitClient.Show(ctx, "HEAD", ignoreFilename)
+// parseAnchorIgnoreFile retrieves and parses the ignore file from the last commit.
+func parseIgnoreFileAtCommit(ctx context.Context, gitClient *git.Client, commit string) (*mutesting.IgnoreFile, error) {
+	file, err := gitClient.Show(ctx, commit, ignoreFilename)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch HEAD ignore file: %w", err)
+		return nil, fmt.Errorf("failed to fetch ignore file from %s: %w", commit, err)
 	}
 
-	headIgnoreFile, err := mutesting.ParseIgnoreFile(file)
+	ignoreFile, err := mutesting.ParseIgnoreFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse HEAD ignore file: %w", err)
+		return nil, fmt.Errorf("failed to parse ignore file from %s: %w", commit, err)
 	}
 
-	return headIgnoreFile, nil
-}
-
-// generateHeadMutations prepares a worktree for the HEAD commit and generates its mutations.
-func generateHeadMutations(
-	ctx context.Context,
-	gitClient *git.Client,
-	disabledMutators []string,
-) (map[mutesting.Mutation][]string, error) {
-	headWorktree, cleanup, err := gitClient.CreateWorktree(ctx, "HEAD")
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup head worktree: %w", err)
-	}
-
-	defer cleanup()
-
-	headMutestingClient, err := mutesting.NewClient(headWorktree)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create head mutant client: %w", err)
-	}
-
-	headMutations, err := headMutestingClient.GenerateMutations(ctx, disabledMutators)
-	if err != nil {
-		return nil, fmt.Errorf("head pre-run failed: %w", err)
-	}
-
-	return headMutations, nil
+	return ignoreFile, nil
 }
 
 // parseCoverProfile reads the coverage profile and processes it into coverage ranges per file.

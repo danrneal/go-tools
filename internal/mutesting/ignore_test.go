@@ -48,27 +48,14 @@ func TestParseIgnoreFile(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "file with only Last-Synced-Commit is parsed successfully",
-			content: `
-				# Last-Synced-Commit: a1b2c3d4e5f6
-			`,
-			want: &IgnoreFile{
-				LastSyncedCommit: "a1b2c3d4e5f6",
-				Mutations:        map[Mutation]bool{},
-			},
-			wantErr: false,
-		},
-		{
 			name: "successfully parses valid ignore file with mutations",
 			content: `
-				# Last-Synced-Commit: a1b2c3d4e5f6
 				# format: filepath:line:mutatorName
 
 				main.go:10:branch/if
 				internal/utils.go:42:condition/negated
 			`,
 			want: &IgnoreFile{
-				LastSyncedCommit: "a1b2c3d4e5f6",
 				Mutations: map[Mutation]bool{
 					{
 						Name:      "branch/if",
@@ -83,14 +70,6 @@ func TestParseIgnoreFile(t *testing.T) {
 				},
 			},
 			wantErr: false,
-		},
-		{
-			name: "malformed Last-Synced-Commit header",
-			content: `
-				# Last-Synced-Commit:
-			`,
-			want:    nil,
-			wantErr: true,
 		},
 	}
 
@@ -112,91 +91,28 @@ func TestParseIgnoreFile(t *testing.T) {
 	}
 }
 
-func TestIgnoreFile_Update(t *testing.T) {
+func TestIgnoreFile_Shift(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name            string
-		ignoreFile      *IgnoreFile
-		ignoreMutations map[Mutation]bool
-		combinedDiff    git.CombinedDiff
-		mutations       map[Mutation][]string
-		commit          string
-		want            *IgnoreFile
+		name         string
+		ignoreFile   *IgnoreFile
+		combinedDiff git.CombinedDiff
+		want         *IgnoreFile
 	}{
 		{
-			name: "empty inputs result in updated commit and empty mutations",
+			name: "empty inputs result in empty mutations",
 			ignoreFile: &IgnoreFile{
-				LastSyncedCommit: "old-commit",
-				Mutations:        map[Mutation]bool{},
-			},
-			ignoreMutations: map[Mutation]bool{},
-			combinedDiff:    git.CombinedDiff{},
-			mutations:       map[Mutation][]string{},
-			commit:          "new-commit",
-			want: &IgnoreFile{
-				LastSyncedCommit: "new-commit",
-				Mutations:        map[Mutation]bool{},
-			},
-		},
-		{
-			name: "mutation missing from ignoreMutations is retained immediately",
-			ignoreFile: &IgnoreFile{
-				LastSyncedCommit: "old-commit",
-				Mutations: map[Mutation]bool{
-					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
-					}: true,
-				},
-			},
-			ignoreMutations: map[Mutation]bool{},
-			combinedDiff:    git.CombinedDiff{},
-			mutations:       map[Mutation][]string{},
-			commit:          "new-commit",
-			want: &IgnoreFile{
-				LastSyncedCommit: "new-commit",
-				Mutations: map[Mutation]bool{
-					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
-					}: true,
-				},
-			},
-		},
-		{
-			name: "mutation is dropped when it is missing from new mutations",
-			ignoreFile: &IgnoreFile{
-				LastSyncedCommit: "old-commit",
-				Mutations: map[Mutation]bool{
-					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
-					}: true,
-				},
-			},
-			ignoreMutations: map[Mutation]bool{
-				{
-					Name:      "branch/if",
-					RelPath:   "main.go",
-					StartLine: 10,
-				}: true,
+				Mutations: map[Mutation]bool{},
 			},
 			combinedDiff: git.CombinedDiff{},
-			mutations:    map[Mutation][]string{},
-			commit:       "new-commit",
 			want: &IgnoreFile{
-				LastSyncedCommit: "new-commit",
-				Mutations:        map[Mutation]bool{},
+				Mutations: map[Mutation]bool{},
 			},
 		},
 		{
-			name: "mutation is retained when it exists in new mutations",
+			name: "mutation is retained unmodified when not in diff",
 			ignoreFile: &IgnoreFile{
-				LastSyncedCommit: "old-commit",
 				Mutations: map[Mutation]bool{
 					{
 						Name:      "branch/if",
@@ -205,24 +121,8 @@ func TestIgnoreFile_Update(t *testing.T) {
 					}: true,
 				},
 			},
-			ignoreMutations: map[Mutation]bool{
-				{
-					Name:      "branch/if",
-					RelPath:   "main.go",
-					StartLine: 10,
-				}: true,
-			},
 			combinedDiff: git.CombinedDiff{},
-			mutations: map[Mutation][]string{
-				{
-					Name:      "branch/if",
-					RelPath:   "main.go",
-					StartLine: 10,
-				}: {"checksum123"},
-			},
-			commit: "new-commit",
 			want: &IgnoreFile{
-				LastSyncedCommit: "new-commit",
 				Mutations: map[Mutation]bool{
 					{
 						Name:      "branch/if",
@@ -235,7 +135,6 @@ func TestIgnoreFile_Update(t *testing.T) {
 		{
 			name: "mutation is updated with new path and shifted line number",
 			ignoreFile: &IgnoreFile{
-				LastSyncedCommit: "old-commit",
 				Mutations: map[Mutation]bool{
 					{
 						Name:      "branch/if",
@@ -243,13 +142,6 @@ func TestIgnoreFile_Update(t *testing.T) {
 						StartLine: 10,
 					}: true,
 				},
-			},
-			ignoreMutations: map[Mutation]bool{
-				{
-					Name:      "branch/if",
-					RelPath:   "main.go",
-					StartLine: 10,
-				}: true,
 			},
 			combinedDiff: git.CombinedDiff{
 				FromFile: map[string]*git.FileDiff{
@@ -267,16 +159,7 @@ func TestIgnoreFile_Update(t *testing.T) {
 					},
 				},
 			},
-			mutations: map[Mutation][]string{
-				{
-					Name:      "branch/if",
-					RelPath:   "new_main.go",
-					StartLine: 12,
-				}: {"checksum123"},
-			},
-			commit: "new-commit",
 			want: &IgnoreFile{
-				LastSyncedCommit: "new-commit",
 				Mutations: map[Mutation]bool{
 					{
 						Name:      "branch/if",
@@ -292,10 +175,88 @@ func TestIgnoreFile_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			tt.ignoreFile.Update(tt.ignoreMutations, tt.combinedDiff, tt.mutations, tt.commit)
+			tt.ignoreFile.Shift(tt.combinedDiff)
 
 			if diff := cmp.Diff(tt.want, tt.ignoreFile); diff != "" {
-				t.Errorf("Ignore.Update() mismatch (-want +got):\n%s", diff)
+				t.Errorf("Ignore.Shift() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIgnoreFile_Filter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		ignoreFile *IgnoreFile
+		mutations  map[Mutation][]string
+		want       *IgnoreFile
+	}{
+		{
+			name: "empty inputs result in empty mutations",
+			ignoreFile: &IgnoreFile{
+				Mutations: map[Mutation]bool{},
+			},
+			mutations: map[Mutation][]string{},
+			want: &IgnoreFile{
+				Mutations: map[Mutation]bool{},
+			},
+		},
+		{
+			name: "mutation is dropped when it is missing from new mutations",
+			ignoreFile: &IgnoreFile{
+				Mutations: map[Mutation]bool{
+					{
+						Name:      "branch/if",
+						RelPath:   "main.go",
+						StartLine: 10,
+					}: true,
+				},
+			},
+			mutations: map[Mutation][]string{},
+			want: &IgnoreFile{
+				Mutations: map[Mutation]bool{},
+			},
+		},
+		{
+			name: "mutation is retained when it exists in new mutations",
+			ignoreFile: &IgnoreFile{
+				Mutations: map[Mutation]bool{
+					{
+						Name:      "branch/if",
+						RelPath:   "main.go",
+						StartLine: 10,
+					}: true,
+				},
+			},
+			mutations: map[Mutation][]string{
+				{
+					Name:      "branch/if",
+					RelPath:   "main.go",
+					StartLine: 10,
+				}: {"checksum123"},
+			},
+			want: &IgnoreFile{
+				Mutations: map[Mutation]bool{
+					{
+						Name:      "branch/if",
+						RelPath:   "main.go",
+						StartLine: 10,
+					}: true,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.ignoreFile.Filter(tt.mutations)
+
+			if diff := cmp.Diff(tt.want, tt.ignoreFile); diff != "" {
+				t.Errorf("Ignore.Filter() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -316,11 +277,9 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 			name: "empty mutations writes only headers",
 			path: ".test-ignore",
 			ignoreFile: &IgnoreFile{
-				LastSyncedCommit: "a1b2c3d4e5f6",
-				Mutations:        map[Mutation]bool{},
+				Mutations: map[Mutation]bool{},
 			},
 			wantOut: `
-				# Last-Synced-Commit: a1b2c3d4e5f6
 				# format: filepath:line:mutatorName
 
 			`,
@@ -329,7 +288,6 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 			name: "populated mutations are sorted by path, line, then name",
 			path: ".test-ignore",
 			ignoreFile: &IgnoreFile{
-				LastSyncedCommit: "a1b2c3d4e5f6",
 				Mutations: map[Mutation]bool{
 					{
 						Name:      "b_mutator",
@@ -354,7 +312,6 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 				},
 			},
 			wantOut: `
-				# Last-Synced-Commit: a1b2c3d4e5f6
 				# format: filepath:line:mutatorName
 
 				internal/file.go:20:b_mutator
@@ -364,13 +321,11 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 			`,
 		},
 		{
-			name: "returns error when file creation fails",
-			path: "",
-			ignoreFile: &IgnoreFile{
-				LastSyncedCommit: "a1b2c3d4e5f6",
-			},
-			wantErr:   true,
-			errTarget: syscall.EISDIR,
+			name:       "returns error when file creation fails",
+			path:       "",
+			ignoreFile: &IgnoreFile{},
+			wantErr:    true,
+			errTarget:  syscall.EISDIR,
 		},
 	}
 

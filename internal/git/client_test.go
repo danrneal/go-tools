@@ -64,6 +64,58 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
+func TestClient_LastCommit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		relPath  string
+		runMock  *runMock
+		wantHead string
+		wantErr  bool
+	}{
+		{
+			name:    "successfully retrieves and trims commit",
+			relPath: ".go-mutesting-ignore",
+			runMock: &runMock{
+				wantArgs: []string{"log", "-1", "--format=%H", "--", ".go-mutesting-ignore"},
+				out:      " a1b2c3d4e5f6 \n",
+				err:      nil,
+			},
+			wantHead: "a1b2c3d4e5f6",
+			wantErr:  false,
+		},
+		{
+			name:    "git command fails",
+			relPath: ".go-mutesting-ignore",
+			runMock: &runMock{
+				wantArgs: []string{"log", "-1", "--format=%H", "--", ".go-mutesting-ignore"},
+				out:      "",
+				err:      errors.New("git crashed"),
+			},
+			wantHead: "",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			client := newMockClient(t, tt.runMock)
+			got, err := client.LastCommit(context.Background(), tt.relPath)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("LatestCommitHash() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if got != tt.wantHead {
+				t.Errorf("LatestCommitHash() got = %v, want %v", got, tt.wantHead)
+			}
+		})
+	}
+}
+
 func TestClient_Show(t *testing.T) {
 	t.Parallel()
 
@@ -123,55 +175,6 @@ func TestClient_Show(t *testing.T) {
 
 			if string(gotOut) != tt.wantOut {
 				t.Errorf("Show() got = %v, want %v", string(gotOut), tt.wantOut)
-			}
-		})
-	}
-}
-
-func TestClient_Head(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		runMock  *runMock
-		wantHead string
-		wantErr  bool
-	}{
-		{
-			name: "successfully retrieves and trims HEAD",
-			runMock: &runMock{
-				wantArgs: []string{"rev-parse", "HEAD"},
-				out:      " a1b2c3d4e5f6 \n",
-				err:      nil,
-			},
-			wantHead: "a1b2c3d4e5f6",
-			wantErr:  false,
-		},
-		{
-			name: "git command fails",
-			runMock: &runMock{
-				wantArgs: []string{"rev-parse", "HEAD"},
-				out:      "",
-				err:      errors.New("git crashed"),
-			},
-			wantHead: "",
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			client := newMockClient(t, tt.runMock)
-			got, err := client.Head(context.Background())
-
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Head() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if got != tt.wantHead {
-				t.Errorf("Head() got = %v, want %v", got, tt.wantHead)
 			}
 		})
 	}

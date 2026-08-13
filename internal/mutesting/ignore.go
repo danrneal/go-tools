@@ -3,7 +3,6 @@ package mutesting
 import (
 	"bufio"
 	"cmp"
-	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -19,13 +18,12 @@ import (
 // mutatorPattern is a regex used to parse individual mutations from the ignore file.
 var mutatorPattern = regexp.MustCompile(`^([^:]+):(\d+):([^:]+)$`)
 
-// IgnoreFile represents the state of ignored mutations, tracking the commit they were last synced with.
+// IgnoreFile represents the state of ignored mutations.
 type IgnoreFile struct {
-	LastSyncedCommit string
-	Mutations        map[Mutation]bool
+	Mutations map[Mutation]bool
 }
 
-// ParseIgnoreFile reads and parses an ignore file, extracting the last synced commit and ignored mutations.
+// ParseIgnoreFile reads and parses an ignore file, extracting the ignored mutations.
 func ParseIgnoreFile(r io.Reader) (*IgnoreFile, error) {
 	ignoreFile := &IgnoreFile{
 		Mutations: map[Mutation]bool{},
@@ -34,16 +32,6 @@ func ParseIgnoreFile(r io.Reader) (*IgnoreFile, error) {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if lastSyncedCommit, ok := strings.CutPrefix(line, "# Last-Synced-Commit:"); ok {
-			lastSyncedCommit = strings.TrimSpace(lastSyncedCommit)
-			if lastSyncedCommit == "" {
-				return nil, errors.New("missing commit hash in Last-Synced-Commit header")
-			}
-
-			ignoreFile.LastSyncedCommit = lastSyncedCommit
-			continue
-		}
-
 		matches := mutatorPattern.FindStringSubmatch(line)
 		if matches == nil {
 			continue
@@ -67,35 +55,36 @@ func ParseIgnoreFile(r io.Reader) (*IgnoreFile, error) {
 	return ignoreFile, nil
 }
 
-// Update refreshes the ignore file's state by applying file diffs to shift line numbers and prune invalid mutations.
-func (i *IgnoreFile) Update(
-	ignoreMutations map[Mutation]bool,
-	combinedDiff git.CombinedDiff,
-	mutations map[Mutation][]string,
-	commit string,
-) {
+// Shift applies a git diff to the ignore file, dynamically recalculating the
+// starting line numbers and file paths of all recorded mutations to match the new state.
+func (i *IgnoreFile) Shift(combinedDiff git.CombinedDiff) {
 	updatedMutations := map[Mutation]bool{}
 	for mutation := range i.Mutations {
-		if !ignoreMutations[mutation] {
-			updatedMutations[mutation] = true
-		} else {
-			if fileDiff, ok := combinedDiff.FromFile[mutation.RelPath]; ok {
-				mutation.StartLine = fileDiff.ToNewLine(mutation.StartLine)
-				mutation.RelPath = fileDiff.NewRelPath
-			}
-
-			if _, ok := mutations[mutation]; ok {
-				updatedMutations[mutation] = true
-			}
+		if fileDiff, ok := combinedDiff.FromFile[mutation.RelPath]; ok {
+			mutation.StartLine = fileDiff.ToNewLine(mutation.StartLine)
+			mutation.RelPath = fileDiff.NewRelPath
 		}
+
+		updatedMutations[mutation] = true
 	}
 
-	i.LastSyncedCommit = commit
 	i.Mutations = updatedMutations
 }
 
-// WriteIgnoreFile writes the updated ignore configuration, including the commit header and sorted mutations,
-// to the specified writer.
+// Filter prunes the ignore file, safely removing any recorded mutations that
+// no longer exist in the provided list of currently valid mutations.
+func (i *IgnoreFile) Filter(mutations map[Mutation][]string) {
+	filteredMutations := map[Mutation]bool{}
+	for mutation := range i.Mutations {
+		if _, ok := mutations[mutation]; ok {
+			filteredMutations[mutation] = true
+		}
+	}
+
+	i.Mutations = filteredMutations
+}
+
+// WriteIgnoreFile writes the updated ignore configuration, including sorted mutations, to the specified writer.
 func (i *IgnoreFile) WriteIgnoreFile(path string) error {
 	file, err := os.Create(path)
 	if err != nil {
@@ -103,10 +92,6 @@ func (i *IgnoreFile) WriteIgnoreFile(path string) error {
 	}
 
 	defer file.Close()
-
-	if _, err := fmt.Fprintf(file, "# Last-Synced-Commit: %s\n", i.LastSyncedCommit); err != nil {
-		return fmt.Errorf("failed to write header: %w", err)
-	}
 
 	if _, err := file.WriteString("# format: filepath:line:mutatorName\n\n"); err != nil {
 		return fmt.Errorf("failed to write format instruction: %w", err)
