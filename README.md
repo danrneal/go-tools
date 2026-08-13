@@ -20,9 +20,21 @@ cover-diff -coverprofile <path-to-coverage.out> [-base <branch-or-commit>]
 
 ### 3. `go-mutesting-ignore`
 
-A wrapper around the [`go-mutesting`](https://github.com/avito-tech/go-mutesting) tool that adds intelligent filtering and ignore capabilities. It generates a mutation testing report while automatically blacklisting mutations that are either explicitly ignored via a `.go-mutesting-ignore` file or that fall outside of your current test coverage boundaries. 
+A wrapper around the [`go-mutesting`](https://github.com/avito-tech/go-mutesting) tool that adds intelligent filtering, dynamic line shifting, and self-healing ignore capabilities. 
 
-This helps focus mutation testing efforts only on lines of code that are supposed to be covered, reducing noise and false positives.
+It generates a mutation testing report while automatically blacklisting mutations that are either explicitly ignored via a `.go-mutesting-ignore` file or that fall outside of your current test coverage boundaries, heavily reducing noise and false positives.
+
+**Advanced Features:**
+*   **Intelligent Shifting:** You can manually add a mutant to the `.go-mutesting-ignore` file. As you add or remove lines of code in your repository, the tool uses Git history to calculate diffs and automatically shifts the line numbers of your ignored mutations, keeping them perfectly synced with the codebase.
+*   **Self-Healing:** At the end of a run, the tool performs a secondary verification pass on your ignored mutations. If your test suite has improved and is now capable of killing an ignored mutation, the tool will automatically "self-heal" by removing that mutation from the ignore file. 
+
+**Ignore File Format:**
+The tool expects a `.go-mutesting-ignore` file in the root of your project. You can copy the exact format output by the mutation HTML report:
+```
+# format: filepath:line:mutatorName
+internal/app/syncer.go:42:branch/if
+internal/app/syncer.go:48:statement/remove
+```
 
 **Usage:**
 

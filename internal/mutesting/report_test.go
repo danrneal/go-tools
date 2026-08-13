@@ -82,7 +82,7 @@ func TestClient_GenerateMutations(t *testing.T) {
 			errTarget: mockErr,
 		},
 		{
-			name: "report.json is missing",
+			name: "ParseReport fails",
 			runMock: &runMock{
 				wantEnv:  []string{"PATH", "GO_BIN"},
 				wantArgs: []string{"./..."},
@@ -91,16 +91,6 @@ func TestClient_GenerateMutations(t *testing.T) {
 			want:      nil,
 			wantErr:   true,
 			errTarget: fs.ErrNotExist,
-		},
-		{
-			name: "JSON decoding fails",
-			runMock: &runMock{
-				wantEnv:  []string{"PATH", "GO_BIN"},
-				wantArgs: []string{"./..."},
-			},
-			report:  `{ "invalid": json }`,
-			want:    nil,
-			wantErr: true,
 		},
 	}
 
@@ -132,6 +122,98 @@ func TestClient_GenerateMutations(t *testing.T) {
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("GenerateMutations() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestClient_ParseReport(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		report    string
+		want      map[Mutation][]string
+		wantErr   bool
+		errTarget error
+	}{
+		{
+			name: "successfully parses valid report with multiple checksums",
+			report: `
+				{
+                   "escaped": [
+                       {
+                           "mutator": {
+                               "mutatorName": "branch/if",
+                               "originalFilePath": "main.go",
+                               "originalStartLine": 10
+                           },
+                           "processOutput": "PASS \"/tmp/path\" with checksum 123abc456def"
+                       },
+                       {
+                           "mutator": {
+                               "mutatorName": "branch/if",
+                               "originalFilePath": "main.go",
+                               "originalStartLine": 10
+                           },
+                           "processOutput": "PASS \"/tmp/path\" with checksum 789ghi012jkl"
+                       }
+                   ]
+               }
+			`,
+			want: map[Mutation][]string{
+				{
+					Name:      "branch/if",
+					RelPath:   "main.go",
+					StartLine: 10,
+				}: {"123abc456def", "789ghi012jkl"},
+			},
+			wantErr: false,
+		},
+		{
+			name:      "report.json is missing",
+			report:    "",
+			want:      nil,
+			wantErr:   true,
+			errTarget: fs.ErrNotExist,
+		},
+		{
+			name:    "JSON decoding fails",
+			report:  `{ "invalid": json }`,
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+
+			if tt.report != "" {
+				reportPath := filepath.Join(dir, "report.json")
+				if err := os.WriteFile(reportPath, []byte(trimIndent(tt.report)), 0o644); err != nil {
+					t.Fatalf("failed to write mock report.json: %v", err)
+				}
+			}
+
+			client := &Client{
+				dir: dir,
+			}
+
+			got, err := client.ParseReport()
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ParseReport() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
+				t.Errorf("ParseReport() error = %v, does not match target %v", err, tt.errTarget)
+			}
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("ParseReport() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

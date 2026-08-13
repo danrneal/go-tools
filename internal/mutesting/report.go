@@ -51,6 +51,17 @@ func (c *Client) GenerateMutations(ctx context.Context, disabledMutators []strin
 		return nil, fmt.Errorf("failed to run go-mutesting pre-run: %w", err)
 	}
 
+	mutations, err := c.ParseReport()
+	if err != nil {
+		return nil, err
+	}
+
+	return mutations, nil
+}
+
+// ParseReport reads the report.json file from the work directory and decodes it,
+// returning a map of escaped mutations and their associated checksums.
+func (c *Client) ParseReport() (map[Mutation][]string, error) {
 	reportPath := filepath.Join(c.dir, "report.json")
 	reportFile, err := os.Open(reportPath)
 	if err != nil {

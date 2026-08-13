@@ -97,26 +97,39 @@ func run(coverProfile string, disabledMutators []string) error {
 		return err
 	}
 
-	totalChecksums := 0
-	for _, checksums := range mutations {
-		totalChecksums += len(checksums)
-	}
-
-	progressBar.Describe("Testing mutations...")
-	progressBar.ChangeMax(totalChecksums - len(blacklist))
-	progressbar.OptionShowCount()(progressBar)
-
-	mutestingClient.OnProgress = func(progress int) {
-		_ = progressBar.Add(progress)
-	}
+	mutestingClient.OnProgress = updateProgressBar(progressBar, mutations, blacklist)
 
 	summary, err := mutest(ctx, mutestingClient, gitClient, worktree, disabledMutators)
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintln(os.Stdout, summary)
+	fmt.Fprintf(os.Stdout, "\n%s\n", summary)
+
+	if len(ignoreFile.Mutations) == 0 {
+		return nil
+	}
+
+	invertedIgnoreFile := createInvertedIgnoreFile(ignoreFile, mutations)
+	invertedBlacklist, err := createBlacklist(invertedIgnoreFile, mutations, fileCoverage, worktree)
+	if err != nil {
+		return fmt.Errorf("failed to create inverted blacklist for removing killed mutants from ignore file: %w", err)
+	}
+
+	fmt.Fprintln(os.Stdout, "Verifying ignored mutations are not killed...")
+	progressBar = newProgressBar()
+	mutestingClient.OnProgress = updateProgressBar(progressBar, mutations, invertedBlacklist)
+
+	removedMutationCount, err := removeKilledMutations(ctx, mutestingClient, ignoreFile, disabledMutators)
+	if err != nil {
+		return err
+	}
+
+	if removedMutationCount > 0 {
+		fmt.Fprintf(os.Stdout, "\nRemoved %d killed mutations from ignore file.\n", removedMutationCount)
+	} else {
+		fmt.Fprintln(os.Stdout, "\nNo killed mutations found in ignore file.")
+	}
 
 	return nil
 }
@@ -137,6 +150,30 @@ func newProgressBar() *progressbar.ProgressBar {
 	progressBar := progressbar.NewOptions(-1, progressBarOpts...)
 
 	return progressBar
+}
+
+// updateProgressBar configures an existing progress bar with the correct maximum value
+// based on the total number of mutations minus those in the blacklist. It also wires
+// the mutesting client to update this progress bar as it executes.
+func updateProgressBar(
+	progressBar *progressbar.ProgressBar,
+	mutations map[mutesting.Mutation][]string,
+	blacklist []string,
+) func(int) {
+	totalChecksums := 0
+	for _, checksums := range mutations {
+		totalChecksums += len(checksums)
+	}
+
+	progressBar.Describe("Testing mutations...")
+	progressBar.ChangeMax(totalChecksums - len(blacklist))
+	progressbar.OptionShowCount()(progressBar)
+
+	onProgress := func(progress int) {
+		_ = progressBar.Add(progress)
+	}
+
+	return onProgress
 }
 
 // parseIgnoreFile opens and parses the dirty ignore file from the current working directory.
@@ -281,6 +318,26 @@ func createBlacklist(
 	return blacklist, nil
 }
 
+// createInvertedIgnoreFile generates a temporary IgnoreFile containing all mutations
+// that are currently NOT in the given ignore file. This inverse state is used
+// to generate a blacklist for the self-healing verification pass.
+func createInvertedIgnoreFile(
+	ignoreFile *mutesting.IgnoreFile,
+	mutations map[mutesting.Mutation][]string,
+) *mutesting.IgnoreFile {
+	invertedIgnoreFile := &mutesting.IgnoreFile{
+		Mutations: map[mutesting.Mutation]bool{},
+	}
+
+	for mutation := range mutations {
+		if !ignoreFile.Mutations[mutation] {
+			invertedIgnoreFile.Mutations[mutation] = true
+		}
+	}
+
+	return invertedIgnoreFile
+}
+
 // mutest executes the mutation testing command on the target worktree and fetches the summary report.
 func mutest(
 	ctx context.Context,
@@ -299,4 +356,34 @@ func mutest(
 	}
 
 	return summary, nil
+}
+
+// removeKilledMutations performs a secondary verification pass by running go-mutesting
+// with an inverted blacklist. It parses the results to determine which ignored mutations
+// were successfully killed by the test suite, removes them from the ignore file, and saves it.
+// It returns the number of mutations that were successfully self-healed.
+func removeKilledMutations(
+	ctx context.Context,
+	mutestingClient *mutesting.Client,
+	ignoreFile *mutesting.IgnoreFile,
+	disabledMutators []string,
+) (int, error) {
+	if _, err := mutestingClient.Mutest(ctx, disabledMutators); err != nil {
+		return 0, fmt.Errorf("failed to run mutation testing with inverted blacklist: %w", err)
+	}
+
+	escapedIgnoredMutations, err := mutestingClient.ParseReport()
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse report for inverted blacklist: %w", err)
+	}
+
+	removedMutationCount := len(ignoreFile.Mutations) - len(escapedIgnoredMutations)
+	if removedMutationCount > 0 {
+		ignoreFile.Filter(escapedIgnoredMutations)
+		if err = ignoreFile.WriteIgnoreFile(ignoreFilename); err != nil {
+			return 0, fmt.Errorf("failed to save ignore file after removing killed ignored mutations: %w", err)
+		}
+	}
+
+	return removedMutationCount, nil
 }
