@@ -51,7 +51,7 @@ func run(coverProfile string, disabledMutators []string) error {
 
 	progressBar := newProgressBar()
 
-	gitClient, err := git.NewClient()
+	gitClient, err := git.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create git client: %w", err)
 	}
@@ -73,7 +73,7 @@ func run(coverProfile string, disabledMutators []string) error {
 
 	defer cleanup()
 
-	mutestingClient, err := mutesting.NewClient(worktree)
+	mutestingClient, err := mutesting.NewClient(mutesting.WithDir(worktree))
 	if err != nil {
 		return fmt.Errorf("failed to create mutantesting client: %w", err)
 	}
@@ -237,7 +237,7 @@ func updateIgnoreFile(
 
 	lastCommitIgnoreFile.Shift(lastCommitCombinedDiff)
 
-	combinedDiff, err := gitClient.Diff(ctx, "HEAD")
+	combinedDiff, err := gitClient.Diff(ctx, "HEAD", "")
 	if err != nil {
 		return fmt.Errorf("failed to get HEAD...Dirty diffs: %w", err)
 	}

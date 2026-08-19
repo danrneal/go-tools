@@ -14,6 +14,19 @@ import (
 	"strings"
 )
 
+// Option defines a functional configuration parameter for the Mutant Client.
+type Option func(*Client)
+
+// WithDir sets the working directory where the go-mutesting commands will be executed.
+// If not provided, commands run in the current working directory.
+func WithDir(dir string) Option {
+	setDir := func(c *Client) {
+		c.dir = dir
+	}
+
+	return setDir
+}
+
 // Client provides a mockable interface for executing go-mutesting commands.
 type Client struct {
 	dir        string
@@ -21,20 +34,12 @@ type Client struct {
 	OnProgress func(int)
 }
 
-// NewClient initializes a new Mutant Client. It optionally accepts a single directory
-// string to execute all underlying go-mutesting commands within.
-func NewClient(dir ...string) (*Client, error) {
-	if len(dir) > 1 {
-		return nil, errors.New("NewClient accepts a maximum of one directory string")
-	}
+// NewClient initializes a new Mutant Client, applying any provided configuration Options.
+func NewClient(opts ...Option) (*Client, error) {
+	client := &Client{}
 
-	workDir := ""
-	if len(dir) > 0 {
-		workDir = dir[0]
-	}
-
-	client := &Client{
-		dir: workDir,
+	for _, opt := range opts {
+		opt(client)
 	}
 
 	run := func(ctx context.Context, env []string, args ...string) ([]byte, error) {
@@ -58,7 +63,7 @@ func NewClient(dir ...string) (*Client, error) {
 		}
 
 		cmd.Env = append(os.Environ(), env...)
-		cmd.Dir = workDir
+		cmd.Dir = client.dir
 		cmd.Stdout = io.MultiWriter(&buf, progressWriter)
 		cmd.Stderr = io.MultiWriter(&buf, progressWriter)
 

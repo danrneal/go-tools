@@ -32,7 +32,7 @@ func run(coverProfile, baseCommit string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	gitClient, err := git.NewClient()
+	gitClient, err := git.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create git client: %w", err)
 	}
@@ -60,7 +60,7 @@ func run(coverProfile, baseCommit string) error {
 	coverageFiles := coverage.Parse(coverProfiles, modulePath)
 	baseCoverageFiles := coverage.Parse(baseCoverProfiles, modulePath)
 
-	combinedDiff, err := gitClient.Diff(ctx, baseCommit)
+	combinedDiff, err := gitClient.Diff(ctx, baseCommit, "")
 	if err != nil {
 		return fmt.Errorf("failed to parse git diff: %w", err)
 	}
@@ -85,7 +85,7 @@ func getCoverProfiles(ctx context.Context, gitClient *git.Client, commit string)
 
 	defer cleanup()
 
-	goClient, err := golang.NewClient(worktree)
+	goClient, err := golang.NewClient(golang.WithDir(worktree))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create go client in worktree: %w", err)
 	}

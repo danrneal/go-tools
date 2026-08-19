@@ -1,3 +1,2 @@
 # format: filepath:line:mutatorName
 
-internal/coverage/coverage.go:70:branch/if

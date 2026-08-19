@@ -2,7 +2,6 @@ package golang
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,27 +9,36 @@ import (
 	"strings"
 )
 
+// Option defines a functional configuration parameter for the Go Client.
+type Option func(*Client)
+
+// WithDir sets the working directory where the Go toolchain commands will be executed.
+// If not provided, commands run in the current working directory.
+func WithDir(dir string) Option {
+	setDir := func(c *Client) {
+		c.dir = dir
+	}
+
+	return setDir
+}
+
 // Client provides a mockable interface for executing Go toolchain commands.
 type Client struct {
 	dir string
 	run func(ctx context.Context, args ...string) ([]byte, error)
 }
 
-// NewClient initializes a new Go Client. It optionally accepts a single directory
-// string to execute all underlying Go commands within.
-func NewClient(dir ...string) (*Client, error) {
-	if len(dir) > 1 {
-		return nil, errors.New("NewClient accepts a maximum of one directory string")
-	}
+// NewClient initializes a new Go Client, applying any provided configuration Options.
+func NewClient(opts ...Option) (*Client, error) {
+	client := &Client{}
 
-	workDir := ""
-	if len(dir) > 0 {
-		workDir = dir[0]
+	for _, opt := range opts {
+		opt(client)
 	}
 
 	run := func(ctx context.Context, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "go", args...)
-		cmd.Dir = workDir
+		cmd.Dir = client.dir
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return out, fmt.Errorf("go command failed: %w", err)
@@ -39,10 +47,7 @@ func NewClient(dir ...string) (*Client, error) {
 		return out, nil
 	}
 
-	client := &Client{
-		dir: workDir,
-		run: run,
-	}
+	client.run = run
 
 	return client, nil
 }

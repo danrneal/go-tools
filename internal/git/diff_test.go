@@ -1,8 +1,8 @@
 package git
 
 import (
-	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -14,23 +14,15 @@ func TestClient_Diff(t *testing.T) {
 	tests := []struct {
 		name     string
 		commitA  string
-		commitB  []string
+		commitB  string
 		runMock  *runMock
 		wantDiff CombinedDiff
 		wantErr  bool
 	}{
 		{
-			name:     "more than two commits",
-			commitA:  "commit1",
-			commitB:  []string{"commit2", "commit3"},
-			runMock:  nil,
-			wantDiff: CombinedDiff{},
-			wantErr:  true,
-		},
-		{
 			name:    "two commits",
 			commitA: "base-commit",
-			commitB: []string{"HEAD"},
+			commitB: "HEAD",
 			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "base-commit", "HEAD"},
 				out:      "",
@@ -63,11 +55,11 @@ func TestClient_Diff(t *testing.T) {
 			commitA: "HEAD",
 			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				out: `
+				out: trimIndent(`
 					diff --git a/script.sh b/script.sh
 					old mode 100644
 					new mode 100755
-				`,
+				`),
 			},
 			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
 			wantErr:  false,
@@ -77,7 +69,7 @@ func TestClient_Diff(t *testing.T) {
 			commitA: "HEAD",
 			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				out: `
+				out: trimIndent(`
 					diff --git a/file.go b/newfile.go
 					similarity index 100%
 					rename from file.go
@@ -87,7 +79,7 @@ func TestClient_Diff(t *testing.T) {
 					+++ b/other.go
 					@@ -1 +1 @@
 					+foo
-				`,
+				`),
 			},
 			wantDiff: CombinedDiff{
 				FromFile: map[string]*FileDiff{
@@ -134,7 +126,7 @@ func TestClient_Diff(t *testing.T) {
 			commitA: "HEAD",
 			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				out: `
+				out: trimIndent(`
 					diff --git a/main.go b/main.go
 					index 8a1218a..87c9307 100644
 					--- a/main.go
@@ -143,7 +135,7 @@ func TestClient_Diff(t *testing.T) {
 					+func main() {
 					+	fmt.Println("hello")
 					+}
-				`,
+				`),
 			},
 			wantDiff: CombinedDiff{
 				FromFile: map[string]*FileDiff{
@@ -182,7 +174,7 @@ func TestClient_Diff(t *testing.T) {
 			commitA: "HEAD",
 			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				out: `
+				out: trimIndent(`
 					diff --git a/new.go b/new.go
 					new file mode 100644
 					index 0000000..8a1218a
@@ -191,7 +183,7 @@ func TestClient_Diff(t *testing.T) {
 					@@ -0,0 +1,2 @@
 					+func main() {
 					+}
-				`,
+				`),
 			},
 			wantDiff: CombinedDiff{
 				FromFile: map[string]*FileDiff{},
@@ -217,14 +209,14 @@ func TestClient_Diff(t *testing.T) {
 			commitA: "HEAD",
 			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				out: `
+				out: trimIndent(`
 					diff --git a/main.go b/main.go
 					index 8a1218a..87c9307 100644
 					--- a/main.go
 					+++ b/main.go
 					@@ -10,3 +12 @@
 					+func main() {
-				`,
+				`),
 			},
 			wantDiff: CombinedDiff{
 				FromFile: map[string]*FileDiff{
@@ -263,7 +255,7 @@ func TestClient_Diff(t *testing.T) {
 			commitA: "HEAD",
 			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				out: `
+				out: trimIndent(`
 					diff --git a/main.go b/main.go
 					index 8a1218a..87c9307 100644
 					--- a/main.go
@@ -272,7 +264,7 @@ func TestClient_Diff(t *testing.T) {
 					+func main() {
 					+	fmt.Println("hello")
 					+}
-				`,
+				`),
 			},
 			wantDiff: CombinedDiff{
 				FromFile: map[string]*FileDiff{
@@ -312,8 +304,9 @@ func TestClient_Diff(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			client := newMockClient(t, tt.runMock)
-			gotDiff, err := client.Diff(context.Background(), tt.commitA, tt.commitB...)
+			ctx := t.Context()
+			client := newMockClient(ctx, t, tt.runMock)
+			gotDiff, err := client.Diff(ctx, tt.commitA, tt.commitB)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Diff() error = %v, wantErr %v", err, tt.wantErr)
@@ -594,4 +587,15 @@ func TestFileDiff_IsAddition(t *testing.T) {
 			}
 		})
 	}
+}
+
+func trimIndent(s string) string {
+	s = strings.TrimPrefix(s, "\n")
+
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimLeft(line, "\t ")
+	}
+
+	return strings.Join(lines, "\n")
 }

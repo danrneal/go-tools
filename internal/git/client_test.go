@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -19,28 +18,44 @@ type runMock struct {
 func TestNewClient(t *testing.T) {
 	t.Parallel()
 
+	testDir := t.TempDir()
+	testWorktreeBaseDir := t.TempDir()
+
 	tests := []struct {
-		name    string
-		dirs    []string
-		wantDir string
-		wantErr bool
+		name                string
+		opts                []Option
+		wantDir             string
+		wantWorktreeBaseDir string
+		wantErr             bool
 	}{
 		{
-			name:    "zero arguments",
-			dirs:    nil,
-			wantDir: "",
-			wantErr: false,
+			name: "successful initialization",
+			opts: []Option{
+				WithDir(testDir),
+				withWorktreeBaseDir(testWorktreeBaseDir),
+				withRun(func(ctx context.Context, args ...string) ([]byte, error) {
+					return nil, nil
+				}),
+			},
+			wantDir:             testDir,
+			wantWorktreeBaseDir: testWorktreeBaseDir,
+			wantErr:             false,
 		},
 		{
-			name:    "one argument",
-			dirs:    []string{"/tmp/workspace"},
-			wantDir: "/tmp/workspace",
-			wantErr: false,
-		},
-		{
-			name:    "two arguments",
-			dirs:    []string{"/tmp/workspace", "/var/lib"},
-			wantErr: true,
+			name: "prune worktrees fails",
+			opts: []Option{
+				withWorktreeBaseDir(testWorktreeBaseDir),
+				withRun(func(ctx context.Context, args ...string) ([]byte, error) {
+					if len(args) >= 2 && args[0] == "worktree" && args[1] == "prune" {
+						return nil, errors.New("simulated git prune failure")
+					}
+
+					return nil, nil
+				}),
+			},
+			wantDir:             "",
+			wantWorktreeBaseDir: "",
+			wantErr:             true,
 		},
 	}
 
@@ -48,7 +63,7 @@ func TestNewClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			client, err := NewClient(tt.dirs...)
+			client, err := NewClient(t.Context(), tt.opts...)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -59,6 +74,10 @@ func TestNewClient(t *testing.T) {
 
 			if client.dir != tt.wantDir {
 				t.Errorf("NewClient() dir = %v, want %v", client.dir, tt.wantDir)
+			}
+
+			if client.worktreeBaseDir != tt.wantWorktreeBaseDir {
+				t.Errorf("NewClient() worktreeBaseDir = %v, want %v", client.worktreeBaseDir, tt.wantWorktreeBaseDir)
 			}
 		})
 	}
@@ -80,7 +99,6 @@ func TestClient_LastCommit(t *testing.T) {
 			runMock: &runMock{
 				wantArgs: []string{"log", "-1", "--format=%H", "--", ".go-mutesting-ignore"},
 				out:      " a1b2c3d4e5f6 \n",
-				err:      nil,
 			},
 			wantHead: "a1b2c3d4e5f6",
 			wantErr:  false,
@@ -90,7 +108,6 @@ func TestClient_LastCommit(t *testing.T) {
 			relPath: ".go-mutesting-ignore",
 			runMock: &runMock{
 				wantArgs: []string{"log", "-1", "--format=%H", "--", ".go-mutesting-ignore"},
-				out:      "",
 				err:      errors.New("git crashed"),
 			},
 			wantHead: "",
@@ -102,8 +119,9 @@ func TestClient_LastCommit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			client := newMockClient(t, tt.runMock)
-			got, err := client.LastCommit(context.Background(), tt.relPath)
+			ctx := t.Context()
+			client := newMockClient(ctx, t, tt.runMock)
+			got, err := client.LastCommit(ctx, tt.relPath)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("LatestCommitHash() error = %v, wantErr %v", err, tt.wantErr)
@@ -134,7 +152,6 @@ func TestClient_Show(t *testing.T) {
 			runMock: &runMock{
 				wantArgs: []string{"show", "a1b2c3:main.go"},
 				out:      "file contents",
-				err:      nil,
 			},
 			wantOut: "file contents",
 			wantErr: false,
@@ -145,7 +162,6 @@ func TestClient_Show(t *testing.T) {
 			relPath: "missing.go",
 			runMock: &runMock{
 				wantArgs: []string{"show", "HEAD:missing.go"},
-				out:      "",
 				err:      errors.New("git crashed"),
 			},
 			wantOut: "",
@@ -157,8 +173,9 @@ func TestClient_Show(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			client := newMockClient(t, tt.runMock)
-			reader, err := client.Show(context.Background(), tt.commit, tt.relPath)
+			ctx := t.Context()
+			client := newMockClient(ctx, t, tt.runMock)
+			reader, err := client.Show(ctx, tt.commit, tt.relPath)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Show() error = %v, wantErr %v", err, tt.wantErr)
@@ -180,10 +197,21 @@ func TestClient_Show(t *testing.T) {
 	}
 }
 
-func newMockClient(t *testing.T, runMock *runMock) *Client {
+func newMockClient(ctx context.Context, t *testing.T, runMock *runMock, opts ...Option) *Client {
 	t.Helper()
 
 	run := func(ctx context.Context, args ...string) ([]byte, error) {
+		return nil, nil
+	}
+
+	opts = append(opts, withWorktreeBaseDir(t.TempDir()), withRun(run))
+
+	client, err := NewClient(ctx, opts...)
+	if err != nil {
+		t.Fatalf("failed to create mock client: %v", err)
+	}
+
+	run = func(ctx context.Context, args ...string) ([]byte, error) {
 		if diff := cmp.Diff(runMock.wantArgs, args); diff != "" {
 			t.Errorf("Show() args mismatch (-want +got):\n%s", diff)
 		}
@@ -192,25 +220,12 @@ func newMockClient(t *testing.T, runMock *runMock) *Client {
 			return nil, runMock.err
 		}
 
-		out := []byte(trimIndent(runMock.out))
+		out := []byte(runMock.out)
 
 		return out, nil
 	}
 
-	client := &Client{
-		run: run,
-	}
+	client.run = run
 
 	return client
-}
-
-func trimIndent(s string) string {
-	s = strings.TrimPrefix(s, "\n")
-
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lines[i] = strings.TrimLeft(line, "\t ")
-	}
-
-	return strings.Join(lines, "\n")
 }

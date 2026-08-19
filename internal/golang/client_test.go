@@ -22,26 +22,15 @@ func TestNewClient(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		dirs    []string
+		opts    []Option
 		wantDir string
 		wantErr bool
 	}{
 		{
-			name:    "zero arguments",
-			dirs:    nil,
-			wantDir: "",
-			wantErr: false,
-		},
-		{
-			name:    "one argument",
-			dirs:    []string{"/tmp/workspace"},
+			name:    "successful initialization",
+			opts:    []Option{WithDir("/tmp/workspace")},
 			wantDir: "/tmp/workspace",
 			wantErr: false,
-		},
-		{
-			name:    "two arguments",
-			dirs:    []string{"/tmp/workspace", "/var/lib"},
-			wantErr: true,
 		},
 	}
 
@@ -49,7 +38,7 @@ func TestNewClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			client, err := NewClient(tt.dirs...)
+			client, err := NewClient(tt.opts...)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -101,7 +90,7 @@ func TestClient_ModulePath(t *testing.T) {
 			t.Parallel()
 
 			client := newMockClient(t, tt.runMock)
-			got, err := client.ModulePath(context.Background())
+			got, err := client.ModulePath(t.Context())
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("ModulePath() error = %v, wantErr %v", err, tt.wantErr)
@@ -159,8 +148,8 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 
 			dir := t.TempDir()
 
-			client := newMockClient(t, tt.runMock, dir)
-			got, err := client.GenerateCoverProfile(context.Background())
+			client := newMockClient(t, tt.runMock, WithDir(dir))
+			got, err := client.GenerateCoverProfile(t.Context())
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("GenerateCoverProfile() error = %v, wantErr %v", err, tt.wantErr)
@@ -173,16 +162,12 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 	}
 }
 
-func newMockClient(t *testing.T, runMock *runMock, dir ...string) *Client {
+func newMockClient(t *testing.T, runMock *runMock, opts ...Option) *Client {
 	t.Helper()
 
-	if len(dir) > 1 {
-		t.Fatalf("")
-	}
-
-	workDir := ""
-	if len(dir) > 0 {
-		workDir = dir[0]
+	client, err := NewClient(opts...)
+	if err != nil {
+		t.Fatalf("failed to create mock client: %v", err)
 	}
 
 	run := func(ctx context.Context, args ...string) ([]byte, error) {
@@ -191,7 +176,7 @@ func newMockClient(t *testing.T, runMock *runMock, dir ...string) *Client {
 		}
 
 		if runMock.coverProfiles != nil {
-			coverProfile := filepath.Join(workDir, "coverage.out")
+			coverProfile := filepath.Join(client.dir, "coverage.out")
 			coverProfiles := []byte(*runMock.coverProfiles)
 			if err := os.WriteFile(coverProfile, coverProfiles, 0o644); err != nil {
 				t.Fatalf("mock failed to write file: %v", err)
@@ -207,10 +192,7 @@ func newMockClient(t *testing.T, runMock *runMock, dir ...string) *Client {
 		return out, nil
 	}
 
-	client := &Client{
-		dir: workDir,
-		run: run,
-	}
+	client.run = run
 
 	return client
 }

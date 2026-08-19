@@ -1,0 +1,616 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>git: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/danrneal/go-tools/internal/git/client.go (91.1%)</option>
+				
+				<option value="file1">github.com/danrneal/go-tools/internal/git/diff.go (98.7%)</option>
+				
+				<option value="file2">github.com/danrneal/go-tools/internal/git/worktree.go (87.1%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package git
+
+import (
+        "bytes"
+        "context"
+        "fmt"
+        "io"
+        "os"
+        "os/exec"
+        "path/filepath"
+        "strings"
+)
+
+type Option func(*Client)
+
+func WithDir(dir string) Option <span class="cov8" title="1">{
+        setDir := func(c *Client) </span><span class="cov8" title="1">{
+                c.dir = dir
+        }</span>
+
+        <span class="cov8" title="1">return setDir</span>
+}
+
+func withWorktreeBaseDir(worktreeBaseDir string) Option <span class="cov8" title="1">{
+        setWorktreeBaseDir := func(c *Client) </span><span class="cov8" title="1">{
+                c.worktreeBaseDir = worktreeBaseDir
+        }</span>
+
+        <span class="cov8" title="1">return setWorktreeBaseDir</span>
+}
+
+// withRun allows tests to inject a mock execution function, bypassing the real os/exec call.
+// It is unexported to prevent external callers from manipulating the internal command runner.
+func withRun(run func(ctx context.Context, args ...string) ([]byte, error)) Option <span class="cov8" title="1">{
+        setRun := func(c *Client) </span><span class="cov8" title="1">{
+                c.run = run
+        }</span>
+
+        <span class="cov8" title="1">return setRun</span>
+}
+
+// Client provides a cohesive interface for executing and parsing Git commands.
+type Client struct {
+        dir             string
+        worktreeBaseDir string
+        run             func(ctx context.Context, args ...string) ([]byte, error)
+}
+
+// NewClient initializes a new Git Client. It optionally accepts a single directory
+// string to execute all underlying Git commands within.
+func NewClient(ctx context.Context, opts ...Option) (*Client, error) <span class="cov8" title="1">{
+        client := &amp;Client{}
+
+        for _, opt := range opts </span><span class="cov8" title="1">{
+                opt(client)
+        }</span>
+
+        <span class="cov8" title="1">if client.worktreeBaseDir == "" </span><span class="cov0" title="0">{
+                client.worktreeBaseDir = filepath.Join(os.TempDir(), worktreeNamespace)
+        }</span>
+
+        <span class="cov8" title="1">if err := os.RemoveAll(client.worktreeBaseDir); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to clean worktree base dir: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">if err := os.MkdirAll(client.worktreeBaseDir, 0o750); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create worktree base dir: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">if client.run == nil </span><span class="cov8" title="1">{
+                run := func(ctx context.Context, args ...string) ([]byte, error) </span><span class="cov8" title="1">{
+                        cmd := exec.CommandContext(ctx, "git", args...)
+                        cmd.Dir = client.dir
+                        out, err := cmd.CombinedOutput()
+                        if err != nil </span><span class="cov8" title="1">{
+                                return out, fmt.Errorf("git command failed: %w", err)
+                        }</span>
+
+                        <span class="cov0" title="0">return out, nil</span>
+                }
+
+                <span class="cov8" title="1">client.run = run</span>
+        }
+
+        <span class="cov8" title="1">if err := client.pruneWorktrees(ctx); err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return client, nil</span>
+}
+
+// LastCommit executes `git log -1 --format=%H -- &lt;relPath&gt;` and returns the
+// hash of the commit that most recently modified the specified file.
+func (c *Client) LastCommit(ctx context.Context, relPath string) (string, error) <span class="cov8" title="1">{
+        out, err := c.run(ctx, "log", "-1", "--format=%H", "--", relPath)
+        if err != nil </span><span class="cov8" title="1">{
+                return "", fmt.Errorf("failed to run git log: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">commitHash := strings.TrimSpace(string(out))
+
+        return commitHash, nil</span>
+}
+
+// Show executes `git show` for a specific commit and file path, returning the output as an [io.Reader].
+func (c *Client) Show(ctx context.Context, commit, relPath string) (io.Reader, error) <span class="cov8" title="1">{
+        out, err := c.run(ctx, "show", fmt.Sprintf("%s:%s", commit, relPath))
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to run git show: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">reader := bytes.NewReader(out)
+
+        return reader, nil</span>
+}
+
+// status executes `git status -z` and returns the raw null-terminated output string.
+func (c *Client) status(ctx context.Context) (string, error) <span class="cov8" title="1">{
+        out, err := c.run(ctx, "status", "-z")
+        if err != nil </span><span class="cov8" title="1">{
+                return "", fmt.Errorf("failed to run git status: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">status := string(out)
+
+        return status, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package git
+
+import (
+        "bufio"
+        "bytes"
+        "context"
+        "fmt"
+        "io"
+        "regexp"
+        "slices"
+        "strconv"
+        "strings"
+)
+
+// hunkRegex parses the unified diff hunk header format (e.g., "@@ -10,3 +12,5 @@").
+// The line counts are optional in unified diffs if they equal 1.
+var hunkRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
+
+// CombinedDiff contains the output of a git diff, pre-indexed for fast lookups
+// by either the original file path (FromFile) or the current file path (ToFile).
+type CombinedDiff struct {
+        FromFile map[string]*FileDiff
+        ToFile   map[string]*FileDiff
+}
+
+// FileDiff contains all the modifications made to a single file, including
+// potential renames and a list of line-shifting hunks.
+type FileDiff struct {
+        OldRelPath string
+        NewRelPath string
+        Hunks      []Hunk
+}
+
+// Hunk represents a single chunk of changes in a file as reported by a git diff.
+// It tracks the starting line and the number of lines affected in both the
+// original (old) and the modified (new) states.
+type Hunk struct {
+        OldStart int
+        OldCount int
+        NewStart int
+        NewCount int
+}
+
+// Diff executes `git diff` against the provided commit(s) using strict formatting
+// flags (-U0, -M, --no-ext-diff) and parses the output into FileDiff structs.
+// It accepts one commit (to compare against dirty state) or two commits.
+func (c *Client) Diff(ctx context.Context, commitA, commitB string) (CombinedDiff, error) <span class="cov8" title="1">{
+        diff, err := c.runDiff(ctx, commitA, commitB)
+        if err != nil </span><span class="cov8" title="1">{
+                return CombinedDiff{}, err
+        }</span>
+
+        <span class="cov8" title="1">reader := bytes.NewReader(diff)
+        combinedDiff, err := parseDiff(reader)
+
+        return combinedDiff, err</span>
+}
+
+// runDiff builds the argument list and executes the git diff command via the client's runner.
+func (c *Client) runDiff(ctx context.Context, commitA, commitB string) ([]byte, error) <span class="cov8" title="1">{
+        args := []string{"diff", "-U0", "-M", "--no-ext-diff", commitA}
+        if commitB != "" </span><span class="cov8" title="1">{
+                args = append(args, commitB)
+        }</span>
+
+        <span class="cov8" title="1">out, err := c.run(ctx, args...)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to run git diff: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return out, nil</span>
+}
+
+// parseDiff reads a unified git diff from the provided reader and parses it
+// into a CombinedDiff struct, organizing the changes by their old and new file paths.
+func parseDiff(r io.Reader) (CombinedDiff, error) <span class="cov8" title="1">{
+        combinedDiff := CombinedDiff{
+                FromFile: map[string]*FileDiff{},
+                ToFile:   map[string]*FileDiff{},
+        }
+
+        var fileDiff *FileDiff
+        scanner := bufio.NewScanner(r)
+        for scanner.Scan() </span><span class="cov8" title="1">{
+                line := scanner.Text()
+
+                fileDiff = parseHeader(line, fileDiff)
+                if fileDiff == nil </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">oldRelPath := fileDiff.OldRelPath
+                if _, ok := combinedDiff.FromFile[oldRelPath]; !ok &amp;&amp; oldRelPath != "" </span><span class="cov8" title="1">{
+                        combinedDiff.FromFile[oldRelPath] = fileDiff
+                }</span>
+
+                <span class="cov8" title="1">newRelPath := fileDiff.NewRelPath
+                if _, ok := combinedDiff.ToFile[newRelPath]; !ok &amp;&amp; newRelPath != "" </span><span class="cov8" title="1">{
+                        combinedDiff.ToFile[newRelPath] = fileDiff
+                }</span>
+
+                <span class="cov8" title="1">matches := hunkRegex.FindStringSubmatch(line)
+                if matches == nil </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">hunk := parseHunk(matches)
+                fileDiff.Hunks = append(fileDiff.Hunks, hunk)</span>
+        }
+
+        <span class="cov8" title="1">if err := scanner.Err(); err != nil </span><span class="cov0" title="0">{
+                return CombinedDiff{}, fmt.Errorf("failed to scan diff: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return combinedDiff, nil</span>
+}
+
+// parseHeader examines a diff output line to determine if it is a file boundary
+// or path change indicator (e.g., "--- a/", "rename to "). It updates the provided
+// FileDiff object or initializes a new one, returning the current active pointer.
+func parseHeader(line string, fileDiff *FileDiff) *FileDiff <span class="cov8" title="1">{
+        switch </span>{
+        case strings.HasPrefix(line, "rename from "):<span class="cov8" title="1">
+                oldRelPath := strings.TrimPrefix(line, "rename from ")
+                fileDiff = &amp;FileDiff{
+                        OldRelPath: oldRelPath,
+                }</span>
+        case strings.HasPrefix(line, "--- a/"):<span class="cov8" title="1">
+                oldRelPath := strings.TrimPrefix(line, "--- a/")
+                if fileDiff == nil || fileDiff.OldRelPath != oldRelPath </span><span class="cov8" title="1">{
+                        fileDiff = &amp;FileDiff{
+                                OldRelPath: oldRelPath,
+                        }
+                }</span>
+        case strings.HasPrefix(line, "--- /dev/null"):<span class="cov8" title="1">
+                fileDiff = &amp;FileDiff{}</span>
+        case strings.HasPrefix(line, "rename to "):<span class="cov8" title="1">
+                newRelPath := strings.TrimPrefix(line, "rename to ")
+                fileDiff.NewRelPath = newRelPath</span>
+        case strings.HasPrefix(line, "+++ b/"):<span class="cov8" title="1">
+                newRelPath := strings.TrimPrefix(line, "+++ b/")
+                fileDiff.NewRelPath = newRelPath</span>
+        }
+
+        <span class="cov8" title="1">return fileDiff</span>
+}
+
+// parseHunk converts regex matches from a diff hunk header into a Hunk struct.
+// It handles omitted counts in unified diffs by defaulting them to 1.
+func parseHunk(matches []string) Hunk <span class="cov8" title="1">{
+        oldStart, _ := strconv.Atoi(matches[1])
+
+        oldCount := 1
+        if matches[2] != "" </span><span class="cov8" title="1">{
+                oldCount, _ = strconv.Atoi(matches[2])
+        }</span>
+
+        <span class="cov8" title="1">newStart, _ := strconv.Atoi(matches[3])
+
+        newCount := 1
+        if matches[4] != "" </span><span class="cov8" title="1">{
+                newCount, _ = strconv.Atoi(matches[4])
+        }</span>
+
+        <span class="cov8" title="1">hunk := Hunk{
+                OldStart: oldStart,
+                OldCount: oldCount,
+                NewStart: newStart,
+                NewCount: newCount,
+        }
+
+        return hunk</span>
+}
+
+// ToNewLine translates a line number from the original file to its corresponding
+// line number in the modified file. If the line was deleted or directly modified,
+// it returns -1.
+func (fd FileDiff) ToNewLine(oldLine int) int <span class="cov8" title="1">{
+        newLine := oldLine
+        for _, hunk := range fd.Hunks </span><span class="cov8" title="1">{
+                if oldLine &lt; hunk.OldStart || (hunk.OldCount == 0 &amp;&amp; oldLine == hunk.OldStart) </span><span class="cov8" title="1">{
+                        break</span>
+                }
+
+                <span class="cov8" title="1">if oldLine &lt; hunk.OldStart+hunk.OldCount </span><span class="cov8" title="1">{
+                        return -1
+                }</span>
+
+                <span class="cov8" title="1">newLine += hunk.NewCount - hunk.OldCount</span>
+        }
+
+        <span class="cov8" title="1">return newLine</span>
+}
+
+// ToOldLine translates a line number from the modified file to its corresponding
+// line number in the original file. If the line was newly added or directly modified,
+// it returns -1.
+func (fd FileDiff) ToOldLine(newLine int) int <span class="cov8" title="1">{
+        oldLine := newLine
+        for _, hunk := range fd.Hunks </span><span class="cov8" title="1">{
+                if newLine &lt; hunk.NewStart || (hunk.NewCount == 0 &amp;&amp; newLine == hunk.NewStart) </span><span class="cov8" title="1">{
+                        break</span>
+                }
+
+                <span class="cov8" title="1">if newLine &lt; hunk.NewStart+hunk.NewCount </span><span class="cov8" title="1">{
+                        return -1
+                }</span>
+
+                <span class="cov8" title="1">oldLine -= hunk.NewCount - hunk.OldCount</span>
+        }
+
+        <span class="cov8" title="1">return oldLine</span>
+}
+
+// IsAddition returns true if the given line number falls within a newly added
+// or modified block of code in this file diff.
+func (fd FileDiff) IsAddition(line int) bool <span class="cov8" title="1">{
+        isAddition := slices.ContainsFunc(fd.Hunks, func(hunk Hunk) bool </span><span class="cov8" title="1">{
+                return line &gt;= hunk.NewStart &amp;&amp; line &lt; hunk.NewStart+hunk.NewCount
+        }</span>)
+
+        <span class="cov8" title="1">return isAddition</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package git
+
+import (
+        "context"
+        "errors"
+        "fmt"
+        "io"
+        "io/fs"
+        "os"
+        "path/filepath"
+        "strings"
+)
+
+// worktreeNamespace defines the deterministic directory name used within the
+// system's temporary directory to isolate and manage temporary git worktrees.
+const worktreeNamespace = "go-tools-worktrees"
+
+// CreateWorktree creates a temporary detached git worktree at the specified commit.
+// It returns the path to the worktree, a cleanup function to remove it, and an error if it fails.
+func (c *Client) CreateWorktree(ctx context.Context, commit string) (string, func(), error) <span class="cov8" title="1">{
+        worktree, err := os.MkdirTemp(c.worktreeBaseDir, "worktree-*")
+        if err != nil </span><span class="cov0" title="0">{
+                return "", nil, fmt.Errorf("failed to create temp dir for worktree: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">if err := c.addWorktree(ctx, worktree, commit); err != nil </span><span class="cov8" title="1">{
+                _ = os.RemoveAll(worktree)
+                return worktree, nil, err
+        }</span>
+
+        <span class="cov8" title="1">cleanup := func() </span><span class="cov8" title="1">{
+                cleanupCtx := context.WithoutCancel(ctx)
+                c.removeWorktree(cleanupCtx, worktree)
+                _ = os.RemoveAll(worktree)
+        }</span>
+
+        <span class="cov8" title="1">return worktree, cleanup, nil</span>
+}
+
+// addWorktree executes the git command to add a new detached worktree.
+func (c *Client) addWorktree(ctx context.Context, worktree, commit string) error <span class="cov8" title="1">{
+        if _, err := c.run(ctx, "worktree", "add", "--detach", worktree, commit); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to run git worktree add: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// removeWorktree executes the git command to forcefully remove a worktree.
+func (c *Client) removeWorktree(ctx context.Context, worktree string) <span class="cov8" title="1">{
+        if _, err := c.run(ctx, "worktree", "remove", "--force", worktree); err != nil </span><span class="cov0" title="0">{
+                fmt.Fprintf(os.Stderr, "warning: failed to forcefully remove worktree %s: %v\n", worktree, err)
+        }</span>
+}
+
+// pruneWorktrees executes git worktree prune to clean up any internal Git metadata
+// that references directories that no longer exist on disk.
+func (c *Client) pruneWorktrees(ctx context.Context) error <span class="cov8" title="1">{
+        if _, err := c.run(ctx, "worktree", "prune"); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to run git worktree prune: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// SyncDirtyFiles reads the current git status and synchronizes the dirty working
+// directory state into the provided worktree by copying, renaming, or deleting files.
+func (c *Client) SyncDirtyFiles(ctx context.Context, worktree string) error <span class="cov8" title="1">{
+        status, err := c.status(ctx)
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">fields := strings.Split(status, "\x00")
+        for i := 0; i &lt; len(fields)-1; i++ </span><span class="cov8" title="1">{
+                field := fields[i]
+
+                indexStatus, worktreeStatus, relPath := field[0], field[1], field[3:]
+                filePath := filepath.Join(worktree, relPath)
+
+                hasStatus := func(s byte) bool </span><span class="cov8" title="1">{
+                        return indexStatus == s || worktreeStatus == s
+                }</span>
+
+                <span class="cov8" title="1">switch </span>{
+                case hasStatus('D'):<span class="cov8" title="1">
+                        if err = os.Remove(filePath); err != nil &amp;&amp; !errors.Is(err, fs.ErrNotExist) </span><span class="cov0" title="0">{
+                                return fmt.Errorf("failed to delete %s: %w", filePath, err)
+                        }</span>
+                case hasStatus('R'):<span class="cov8" title="1">
+                        oldFilePath := filepath.Join(worktree, fields[i+1])
+                        if err = os.Remove(oldFilePath); err != nil &amp;&amp; !errors.Is(err, fs.ErrNotExist) </span><span class="cov0" title="0">{
+                                return fmt.Errorf("failed to delete %s: %w", filePath, err)
+                        }</span>
+
+                        <span class="cov8" title="1">fallthrough</span>
+                case hasStatus('C'):<span class="cov8" title="1">
+                        i++
+                        fallthrough</span>
+                default:<span class="cov8" title="1">
+                        if err := os.MkdirAll(filepath.Dir(filePath), 0o750); err != nil </span><span class="cov0" title="0">{
+                                return fmt.Errorf("failed to create directory for %s: %w", filePath, err)
+                        }</span>
+
+                        <span class="cov8" title="1">if err := c.copyToWorktree(relPath, worktree); err != nil </span><span class="cov8" title="1">{
+                                return err
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// CopyFromWorktree copies a file from the provided worktree back into the client's working directory.
+func (c *Client) CopyFromWorktree(relPath, worktree string) error <span class="cov8" title="1">{
+        src := filepath.Join(worktree, relPath)
+        dst := filepath.Join(c.dir, relPath)
+
+        return copyFile(src, dst)
+}</span>
+
+// copyToWorktree copies a file from the client's working directory into the specified worktree.
+func (c *Client) copyToWorktree(relPath, worktree string) error <span class="cov8" title="1">{
+        src := filepath.Join(c.dir, relPath)
+        dst := filepath.Join(worktree, relPath)
+
+        return copyFile(src, dst)
+}</span>
+
+// copyFile is a helper utility that copies a file from src to dst.
+func copyFile(src, dst string) error <span class="cov8" title="1">{
+        in, err := os.Open(src)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to open src: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">defer in.Close()
+
+        out, err := os.Create(dst)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create dst: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">defer out.Close()
+
+        if _, err = io.Copy(out, in); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to copy data: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">if err = out.Sync(); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to sync file: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

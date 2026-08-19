@@ -1,11 +1,11 @@
 module github.com/danrneal/go-tools
 
-go 1.26.5
+go 1.26.2
 
 require (
 	github.com/google/go-cmp v0.7.0
 	github.com/schollz/progressbar/v3 v3.19.1
-	golang.org/x/tools v0.48.0
+	golang.org/x/tools v0.49.0
 )
 
 require (

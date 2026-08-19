@@ -3,45 +3,89 @@ package git
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
-// Client provides a cohesive interface for executing and parsing Git commands.
-type Client struct {
-	dir string
-	run func(ctx context.Context, arg ...string) ([]byte, error)
+// Option defines a functional configuration parameter for the Git Client.
+type Option func(*Client)
+
+// WithDir sets the working directory where the Git commands will be executed.
+// If not provided, commands run in the current working directory.
+func WithDir(dir string) Option {
+	setDir := func(c *Client) {
+		c.dir = dir
+	}
+
+	return setDir
 }
 
-// NewClient initializes a new Git Client. It optionally accepts a single directory
-// string to execute all underlying Git commands within.
-func NewClient(dir ...string) (*Client, error) {
-	if len(dir) > 1 {
-		return nil, errors.New("NewClient accepts a maximum of one directory string")
+func withWorktreeBaseDir(worktreeBaseDir string) Option {
+	setWorktreeBaseDir := func(c *Client) {
+		c.worktreeBaseDir = worktreeBaseDir
 	}
 
-	repoDir := ""
-	if len(dir) == 1 {
-		repoDir = dir[0]
+	return setWorktreeBaseDir
+}
+
+// withRun allows tests to inject a mock execution function, bypassing the real os/exec call.
+// It is unexported to prevent external callers from manipulating the internal command runner.
+func withRun(run func(ctx context.Context, args ...string) ([]byte, error)) Option {
+	setRun := func(c *Client) {
+		c.run = run
 	}
 
-	run := func(ctx context.Context, args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, "git", args...)
-		cmd.Dir = repoDir
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return out, fmt.Errorf("git command failed: %w", err)
-		}
+	return setRun
+}
 
-		return out, nil
-	}
+// Client provides a cohesive interface for executing and parsing Git commands.
+type Client struct {
+	dir             string
+	worktreeBaseDir string
+	run             func(ctx context.Context, args ...string) ([]byte, error)
+}
+
+// NewClient initializes a new Git Client, applying any provided configuration Options.
+func NewClient(ctx context.Context, opts ...Option) (*Client, error) {
+	worktreeBaseDir := filepath.Join(os.TempDir(), worktreeNamespace)
 
 	client := &Client{
-		dir: repoDir,
-		run: run,
+		worktreeBaseDir: worktreeBaseDir,
+	}
+
+	for _, opt := range opts {
+		opt(client)
+	}
+
+	if err := os.RemoveAll(client.worktreeBaseDir); err != nil {
+		return nil, fmt.Errorf("failed to clean worktree base dir: %w", err)
+	}
+
+	if err := os.MkdirAll(client.worktreeBaseDir, 0o750); err != nil {
+		return nil, fmt.Errorf("failed to create worktree base dir: %w", err)
+	}
+
+	if client.run == nil {
+		run := func(ctx context.Context, args ...string) ([]byte, error) {
+			cmd := exec.CommandContext(ctx, "git", args...)
+			cmd.Dir = client.dir
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return out, fmt.Errorf("git command failed: %w", err)
+			}
+
+			return out, nil
+		}
+
+		client.run = run
+	}
+
+	if err := client.pruneWorktrees(ctx); err != nil {
+		return nil, err
 	}
 
 	return client, nil

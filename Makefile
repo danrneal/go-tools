@@ -6,9 +6,6 @@ fast: lint test build coverage clean
 
 update:
 	@echo "==> Upgrading Go version and dependencies..."
-	go get go@latest
-	go get -u ./...
-	go mod tidy
 	@echo "==> Updating tooling configurations from danrneal/go-tools..."
 	curl -sSfL -z .golangci.yml https://raw.githubusercontent.com/danrneal/go-tools/main/.golangci.yml -o .golangci.yml
 	curl -sSfL -z Makefile https://raw.githubusercontent.com/danrneal/go-tools/main/Makefile -o Makefile
@@ -18,6 +15,10 @@ update:
 	go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
 	go install github.com/danrneal/go-tools/cmd/cover-diff@latest
 	go install github.com/danrneal/go-tools/cmd/go-mutesting-ignore@latest
+	$(eval GO_VERSION=$(shell $(shell go env GOPATH)/bin/golangci-lint version --json | jq -r '.goVersion | sub("^go"; "")'))
+	go get go@$(GO_VERSION)
+	go get -u ./...
+	go mod tidy
 
 lint:
 	@echo "==> Running golangci-lint..."

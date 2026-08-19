@@ -1,7 +1,6 @@
 package mutesting
 
 import (
-	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -107,10 +106,9 @@ func TestClient_GenerateMutations(t *testing.T) {
 				}
 			}
 
-			client := newMockClient(t, tt.runMock)
-			client.dir = dir
+			client := newMockClient(t, tt.runMock, WithDir(dir))
 
-			got, err := client.GenerateMutations(context.Background(), tt.disabledMutators)
+			got, err := client.GenerateMutations(t.Context(), tt.disabledMutators)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("GenerateMutations() error = %v, wantErr %v", err, tt.wantErr)

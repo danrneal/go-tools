@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -45,12 +44,8 @@ type Hunk struct {
 // Diff executes `git diff` against the provided commit(s) using strict formatting
 // flags (-U0, -M, --no-ext-diff) and parses the output into FileDiff structs.
 // It accepts one commit (to compare against dirty state) or two commits.
-func (c *Client) Diff(ctx context.Context, commitA string, commitB ...string) (CombinedDiff, error) {
-	if len(commitB) > 1 {
-		return CombinedDiff{}, errors.New("git diff accepts a maximum of two commits")
-	}
-
-	diff, err := c.runDiff(ctx, commitA, commitB...)
+func (c *Client) Diff(ctx context.Context, commitA, commitB string) (CombinedDiff, error) {
+	diff, err := c.runDiff(ctx, commitA, commitB)
 	if err != nil {
 		return CombinedDiff{}, err
 	}
@@ -62,17 +57,13 @@ func (c *Client) Diff(ctx context.Context, commitA string, commitB ...string) (C
 }
 
 // runDiff builds the argument list and executes the git diff command via the client's runner.
-func (c *Client) runDiff(ctx context.Context, commitA string, commitB ...string) ([]byte, error) {
-	if len(commitB) == 1 {
-		out, err := c.run(ctx, "diff", "-U0", "-M", "--no-ext-diff", commitA, commitB[0])
-		if err != nil {
-			return nil, fmt.Errorf("failed to run git diff: %w", err)
-		}
-
-		return out, nil
+func (c *Client) runDiff(ctx context.Context, commitA, commitB string) ([]byte, error) {
+	args := []string{"diff", "-U0", "-M", "--no-ext-diff", commitA}
+	if commitB != "" {
+		args = append(args, commitB)
 	}
 
-	out, err := c.run(ctx, "diff", "-U0", "-M", "--no-ext-diff", commitA)
+	out, err := c.run(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run git diff: %w", err)
 	}

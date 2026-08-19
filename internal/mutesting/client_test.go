@@ -23,26 +23,15 @@ func TestNewClient(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		dirs    []string
+		opts    []Option
 		wantDir string
 		wantErr bool
 	}{
 		{
-			name:    "zero arguments",
-			dirs:    nil,
-			wantDir: "",
-			wantErr: false,
-		},
-		{
-			name:    "one argument",
-			dirs:    []string{"/tmp/workspace"},
+			name:    "successful initialization",
+			opts:    []Option{WithDir("/tmp/workspace")},
 			wantDir: "/tmp/workspace",
 			wantErr: false,
-		},
-		{
-			name:    "two arguments",
-			dirs:    []string{"/tmp/workspace", "/var/lib"},
-			wantErr: true,
 		},
 	}
 
@@ -50,7 +39,7 @@ func TestNewClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			client, err := NewClient(tt.dirs...)
+			client, err := NewClient(tt.opts...)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -120,7 +109,7 @@ func TestClient_Mutest(t *testing.T) {
 			t.Parallel()
 
 			client := newMockClient(t, tt.runMock)
-			got, err := client.Mutest(context.Background(), tt.disabledMutators)
+			got, err := client.Mutest(t.Context(), tt.disabledMutators)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Mutest() error = %v, wantErr %v", err, tt.wantErr)
@@ -224,8 +213,13 @@ func TestProgressWriter_Write(t *testing.T) {
 	}
 }
 
-func newMockClient(t *testing.T, runMock *runMock) *Client {
+func newMockClient(t *testing.T, runMock *runMock, opts ...Option) *Client {
 	t.Helper()
+
+	client, err := NewClient(opts...)
+	if err != nil {
+		t.Fatalf("failed to create mock client: %v", err)
+	}
 
 	run := func(ctx context.Context, env []string, args ...string) ([]byte, error) {
 		gotEnv := make([]string, 0, len(env))
@@ -253,9 +247,7 @@ func newMockClient(t *testing.T, runMock *runMock) *Client {
 		return out, nil
 	}
 
-	client := &Client{
-		run: run,
-	}
+	client.run = run
 
 	return client
 }

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -37,9 +38,13 @@ func TestClient_CreateWorktree(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			ctx := t.Context()
+
 			removeWorktreeCalled := false
 			run := func(ctx context.Context, args ...string) ([]byte, error) {
 				switch args[1] {
+				case "prune":
+					return nil, nil
 				case "add":
 					wantArgs := []string{"worktree", "add", "--detach", args[3], tt.commit}
 					if diff := cmp.Diff(wantArgs, args); diff != "" {
@@ -56,11 +61,18 @@ func TestClient_CreateWorktree(t *testing.T) {
 				return nil, nil
 			}
 
-			client := &Client{
-				run: run,
+			worktreeBaseTempDir := t.TempDir()
+
+			opts := []Option{
+				withWorktreeBaseDir(worktreeBaseTempDir),
+				withRun(run),
 			}
 
-			ctx := context.Background()
+			client, err := NewClient(ctx, opts...)
+			if err != nil {
+				t.Fatalf("failed to create client: %v", err)
+			}
+
 			worktree, cleanup, err := client.CreateWorktree(ctx, tt.commit)
 
 			if (err != nil) != tt.wantErr {
@@ -88,6 +100,10 @@ func TestClient_CreateWorktree(t *testing.T) {
 			if _, statErr := os.Stat(worktree); !errors.Is(statErr, fs.ErrNotExist) {
 				t.Errorf("cleanup() failed to remove directory %s", worktree)
 			}
+
+			if !strings.HasPrefix(worktree, worktreeBaseTempDir) {
+				t.Errorf("expected worktree to be created inside %s, got %s", worktreeBaseTempDir, worktree)
+			}
 		})
 	}
 }
@@ -97,16 +113,18 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		status        string
-		runErr        error
+		runMock       *runMock
 		setupRepo     map[string]string
 		setupWorktree map[string]string
 		wantWorktree  map[string]string
 		wantErr       bool
 	}{
 		{
-			name:   "empty status string performs no actions",
-			status: "",
+			name: "empty status string performs no actions",
+			runMock: &runMock{
+				wantArgs: []string{"status", "-z"},
+				out:      "",
+			},
 			setupRepo: map[string]string{
 				"foo.go": "repo content",
 			},
@@ -119,8 +137,11 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:      "deleted file is removed from worktree",
-			status:    " D deleted.go\x00",
+			name: "deleted file is removed from worktree",
+			runMock: &runMock{
+				wantArgs: []string{"status", "-z"},
+				out:      " D deleted.go\x00",
+			},
 			setupRepo: map[string]string{},
 			setupWorktree: map[string]string{
 				"deleted.go": "worktree content",
@@ -132,16 +153,22 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:          "deleted file already missing from worktree",
-			status:        "D  already_missing.go\x00",
+			name: "deleted file already missing from worktree",
+			runMock: &runMock{
+				wantArgs: []string{"status", "-z"},
+				out:      "D  already_missing.go\x00",
+			},
 			setupRepo:     map[string]string{},
 			setupWorktree: map[string]string{},
 			wantWorktree:  map[string]string{},
 			wantErr:       false,
 		},
 		{
-			name:   "modified file is copied from repo to worktree",
-			status: " M modified.go\x00",
+			name: "modified file is copied from repo to worktree",
+			runMock: &runMock{
+				wantArgs: []string{"status", "-z"},
+				out:      " M modified.go\x00",
+			},
 			setupRepo: map[string]string{
 				"modified.go": "new content",
 			},
@@ -154,8 +181,11 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "copied file is created in worktree without deleting original",
-			status: "C  copied.go\x00original.go\x00",
+			name: "copied file is created in worktree without deleting original",
+			runMock: &runMock{
+				wantArgs: []string{"status", "-z"},
+				out:      "C  copied.go\x00original.go\x00",
+			},
 			setupRepo: map[string]string{
 				"copied.go": "new content",
 			},
@@ -169,8 +199,11 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "renamed file deletes old and copies new",
-			status: "R  new.go\x00old.go\x00",
+			name: "renamed file deletes old and copies new",
+			runMock: &runMock{
+				wantArgs: []string{"status", "-z"},
+				out:      "R  new.go\x00old.go\x00",
+			},
 			setupRepo: map[string]string{
 				"new.go": "new content",
 			},
@@ -185,8 +218,11 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "renamed file old file already missing",
-			status: "R  new.go\x00old.go\x00",
+			name: "renamed file old file already missing",
+			runMock: &runMock{
+				wantArgs: []string{"status", "-z"},
+				out:      "R  new.go\x00old.go\x00",
+			},
 			setupRepo: map[string]string{
 				"new.go": "new content",
 			},
@@ -197,15 +233,20 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:         "git status fails",
-			status:       "",
-			runErr:       errors.New("git status failed"),
+			name: "git status fails",
+			runMock: &runMock{
+				wantArgs: []string{"status", "-z"},
+				err:      errors.New("git status failed"),
+			},
 			wantWorktree: map[string]string{},
 			wantErr:      true,
 		},
 		{
-			name:         "copyFile fails",
-			status:       "M  missing.go\x00",
+			name: "copyFile fails",
+			runMock: &runMock{
+				wantArgs: []string{"status", "-z"},
+				out:      "M  missing.go\x00",
+			},
 			setupRepo:    map[string]string{},
 			wantWorktree: map[string]string{},
 			wantErr:      true,
@@ -239,22 +280,9 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 				}
 			}
 
-			run := func(ctx context.Context, args ...string) ([]byte, error) {
-				if tt.runErr != nil {
-					return nil, tt.runErr
-				}
-
-				status := []byte(tt.status)
-
-				return status, nil
-			}
-
-			client := &Client{
-				dir: repo,
-				run: run,
-			}
-
-			err := client.SyncDirtyFiles(context.Background(), worktree)
+			ctx := t.Context()
+			client := newMockClient(ctx, t, tt.runMock, WithDir(repo))
+			err := client.SyncDirtyFiles(ctx, worktree)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("SyncDirtyFiles() error = %v, wantErr %v", err, tt.wantErr)
@@ -354,10 +382,8 @@ func TestClient_CopyFromWorktree(t *testing.T) {
 				}
 			}
 
-			client := &Client{
-				dir: repo,
-			}
-
+			runMock := &runMock{}
+			client := newMockClient(t.Context(), t, runMock, WithDir(repo))
 			err := client.CopyFromWorktree(tt.relPath, worktree)
 
 			if (err != nil) != tt.wantErr {
