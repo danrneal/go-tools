@@ -83,7 +83,15 @@ func WithDir(dir string) Option {
 
 // Mutest runs the mutation testing process, outputting HTML results and utilizing a blacklist.
 func (c *Client) Mutest(ctx context.Context, disabledMutators []string) (string, error) {
-	env, cleanup, err := setupGoTestWrapper("shift && exec $GO_BIN test -trimpath \"$@\"")
+	goTestLogic := `
+		shift
+		"$GO_BIN" test -trimpath "$@"
+		exit_status=$?
+		git clean -fdq -e "go-mutesting.blacklist" -e "report.json" -e "go-mutesting-report.html" -e "*.tmp"
+		exit $exit_status
+	`
+
+	env, cleanup, err := setupGoTestWrapper(goTestLogic)
 	if err != nil {
 		return "", err
 	}
