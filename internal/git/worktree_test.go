@@ -63,12 +63,7 @@ func TestClient_CreateWorktree(t *testing.T) {
 
 			worktreeBaseTempDir := t.TempDir()
 
-			opts := []Option{
-				withWorktreeBaseDir(worktreeBaseTempDir),
-				withRun(run),
-			}
-
-			client, err := NewClient(ctx, opts...)
+			client, err := NewClient(ctx, worktreeBaseTempDir, withRun(run))
 			if err != nil {
 				t.Fatalf("failed to create client: %v", err)
 			}

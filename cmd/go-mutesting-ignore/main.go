@@ -21,12 +21,8 @@ import (
 const ignoreFilename = ".go-mutesting-ignore"
 
 func main() {
-	coverProfile := flag.String("coverprofile", "", "Path to the coverage.out file")
-
-	flag.Parse()
-
-	// These checks are disabled since they are duplicates 1:1 of checks in gremlins.
-	disabledMutators := []string{
+	// These checks are disabled by default since they are duplicates 1:1 of checks in gremlins.
+	defaultDisabledMutators := []string{
 		"arithmetic/assign_invert",
 		"arithmetic/assignment",
 		"arithmetic/base",
@@ -37,7 +33,25 @@ func main() {
 		"expression/remove",
 	}
 
-	if err := run(*coverProfile, disabledMutators); err != nil {
+	coverProfile := flag.String("coverprofile", "", "Path to the coverage.out file")
+	disable := flag.String(
+		"disable",
+		strings.Join(defaultDisabledMutators, ","),
+		"Comma-separated list of mutators to disable",
+	)
+
+	flag.Parse()
+
+	var disabledMutators []string
+	if *disable != "" {
+		for disabledMutator := range strings.SplitSeq(*disable, ",") {
+			disabledMutators = append(disabledMutators, strings.TrimSpace(disabledMutator))
+		}
+	}
+
+	worktreeBaseDir := filepath.Join(os.TempDir(), "go-mutesting-ignore-worktrees")
+
+	if err := run(*coverProfile, worktreeBaseDir, disabledMutators); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -45,13 +59,13 @@ func main() {
 
 // run orchestrates the execution of go-mutesting-ignore, syncing the workspace, evaluating test coverage,
 // and producing a mutation testing report.
-func run(coverProfile string, disabledMutators []string) error {
+func run(coverProfile, worktreeBaseDir string, disabledMutators []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
 	progressBar := newProgressBar()
 
-	gitClient, err := git.NewClient(ctx)
+	gitClient, err := git.NewClient(ctx, worktreeBaseDir)
 	if err != nil {
 		return fmt.Errorf("failed to create git client: %w", err)
 	}

@@ -11,10 +11,6 @@ import (
 	"strings"
 )
 
-// worktreeNamespace defines the deterministic directory name used within the
-// system's temporary directory to isolate and manage temporary git worktrees.
-const worktreeNamespace = "go-tools-worktrees"
-
 // CreateWorktree creates a temporary detached git worktree at the specified commit.
 // It returns the path to the worktree, a cleanup function to remove it, and an error if it fails.
 func (c *Client) CreateWorktree(ctx context.Context, commit string) (string, func(), error) {

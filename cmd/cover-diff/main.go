@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 
 	"github.com/danrneal/go-tools/internal/coverage"
 	"github.com/danrneal/go-tools/internal/git"
@@ -19,7 +20,9 @@ func main() {
 
 	flag.Parse()
 
-	if err := run(*coverProfile, *baseCommit); err != nil {
+	worktreeBaseDir := filepath.Join(os.TempDir(), "cover-diff-worktrees")
+
+	if err := run(*coverProfile, *baseCommit, worktreeBaseDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -28,11 +31,11 @@ func main() {
 // run orchestrates the coverage diffing process. It parses the current coverage,
 // generates and parses the base coverage, computes the git diff, and finally
 // compares the data sets to report regressions or uncovered new code.
-func run(coverProfile, baseCommit string) error {
+func run(coverProfile, baseCommit, worktreeBaseDir string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	gitClient, err := git.NewClient(ctx)
+	gitClient, err := git.NewClient(ctx, worktreeBaseDir)
 	if err != nil {
 		return fmt.Errorf("failed to create git client: %w", err)
 	}

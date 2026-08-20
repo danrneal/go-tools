@@ -9,19 +9,6 @@ import (
 	"strings"
 )
 
-// Option defines a functional configuration parameter for the Go Client.
-type Option func(*Client)
-
-// WithDir sets the working directory where the Go toolchain commands will be executed.
-// If not provided, commands run in the current working directory.
-func WithDir(dir string) Option {
-	setDir := func(c *Client) {
-		c.dir = dir
-	}
-
-	return setDir
-}
-
 // Client provides a mockable interface for executing Go toolchain commands.
 type Client struct {
 	dir string
@@ -50,6 +37,19 @@ func NewClient(opts ...Option) (*Client, error) {
 	client.run = run
 
 	return client, nil
+}
+
+// Option defines a functional configuration parameter for the Go Client.
+type Option func(*Client)
+
+// WithDir sets the working directory where the Go toolchain commands will be executed.
+// If not provided, commands run in the current working directory.
+func WithDir(dir string) Option {
+	setDir := func(c *Client) {
+		c.dir = dir
+	}
+
+	return setDir
 }
 
 // ModulePath executes `go list -m` and returns the current module path.

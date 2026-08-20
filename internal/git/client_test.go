@@ -32,7 +32,6 @@ func TestNewClient(t *testing.T) {
 			name: "successful initialization",
 			opts: []Option{
 				WithDir(testDir),
-				withWorktreeBaseDir(testWorktreeBaseDir),
 				withRun(func(ctx context.Context, args ...string) ([]byte, error) {
 					return nil, nil
 				}),
@@ -44,7 +43,6 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "prune worktrees fails",
 			opts: []Option{
-				withWorktreeBaseDir(testWorktreeBaseDir),
 				withRun(func(ctx context.Context, args ...string) ([]byte, error) {
 					if len(args) >= 2 && args[0] == "worktree" && args[1] == "prune" {
 						return nil, errors.New("simulated git prune failure")
@@ -63,7 +61,7 @@ func TestNewClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			client, err := NewClient(t.Context(), tt.opts...)
+			client, err := NewClient(t.Context(), testWorktreeBaseDir, tt.opts...)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -204,9 +202,9 @@ func newMockClient(ctx context.Context, t *testing.T, runMock *runMock, opts ...
 		return nil, nil
 	}
 
-	opts = append(opts, withWorktreeBaseDir(t.TempDir()), withRun(run))
+	opts = append(opts, withRun(run))
 
-	client, err := NewClient(ctx, opts...)
+	client, err := NewClient(ctx, t.TempDir(), opts...)
 	if err != nil {
 		t.Fatalf("failed to create mock client: %v", err)
 	}

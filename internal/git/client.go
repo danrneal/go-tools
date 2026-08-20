@@ -7,40 +7,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
-
-// Option defines a functional configuration parameter for the Git Client.
-type Option func(*Client)
-
-// WithDir sets the working directory where the Git commands will be executed.
-// If not provided, commands run in the current working directory.
-func WithDir(dir string) Option {
-	setDir := func(c *Client) {
-		c.dir = dir
-	}
-
-	return setDir
-}
-
-func withWorktreeBaseDir(worktreeBaseDir string) Option {
-	setWorktreeBaseDir := func(c *Client) {
-		c.worktreeBaseDir = worktreeBaseDir
-	}
-
-	return setWorktreeBaseDir
-}
-
-// withRun allows tests to inject a mock execution function, bypassing the real os/exec call.
-// It is unexported to prevent external callers from manipulating the internal command runner.
-func withRun(run func(ctx context.Context, args ...string) ([]byte, error)) Option {
-	setRun := func(c *Client) {
-		c.run = run
-	}
-
-	return setRun
-}
 
 // Client provides a cohesive interface for executing and parsing Git commands.
 type Client struct {
@@ -50,9 +18,7 @@ type Client struct {
 }
 
 // NewClient initializes a new Git Client, applying any provided configuration Options.
-func NewClient(ctx context.Context, opts ...Option) (*Client, error) {
-	worktreeBaseDir := filepath.Join(os.TempDir(), worktreeNamespace)
-
+func NewClient(ctx context.Context, worktreeBaseDir string, opts ...Option) (*Client, error) {
 	client := &Client{
 		worktreeBaseDir: worktreeBaseDir,
 	}
@@ -89,6 +55,29 @@ func NewClient(ctx context.Context, opts ...Option) (*Client, error) {
 	}
 
 	return client, nil
+}
+
+// Option defines a functional configuration parameter for the Git Client.
+type Option func(*Client)
+
+// WithDir sets the working directory where the Git commands will be executed.
+// If not provided, commands run in the current working directory.
+func WithDir(dir string) Option {
+	setDir := func(c *Client) {
+		c.dir = dir
+	}
+
+	return setDir
+}
+
+// withRun allows tests to inject a mock execution function, bypassing the real os/exec call.
+// It is unexported to prevent external callers from manipulating the internal command runner.
+func withRun(run func(ctx context.Context, args ...string) ([]byte, error)) Option {
+	setRun := func(c *Client) {
+		c.run = run
+	}
+
+	return setRun
 }
 
 // LastCommit executes `git log -1 --format=%H -- <relPath>` and returns the

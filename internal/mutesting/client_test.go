@@ -125,7 +125,7 @@ func TestClient_Mutest(t *testing.T) {
 					continue
 				}
 
-				goTestWrapperDir := strings.Split(path, ":")[0]
+				goTestWrapperDir, _, _ := strings.Cut(path, ":")
 				if _, err := os.Stat(goTestWrapperDir); err == nil || !errors.Is(err, fs.ErrNotExist) {
 					t.Errorf(
 						"expected go test wrapper directory %s to be deleted by cleanup(), but it exists",
@@ -224,7 +224,7 @@ func newMockClient(t *testing.T, runMock *runMock, opts ...Option) *Client {
 	run := func(ctx context.Context, env []string, args ...string) ([]byte, error) {
 		gotEnv := make([]string, 0, len(env))
 		for _, envVar := range env {
-			gotEnvVar := strings.Split(envVar, "=")[0]
+			gotEnvVar, _, _ := strings.Cut(envVar, "=")
 			gotEnv = append(gotEnv, gotEnvVar)
 		}
 
