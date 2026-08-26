@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -95,6 +96,10 @@ func getCoverProfiles(ctx context.Context, gitClient *git.Client, commit string)
 
 	coverProfile, err := goClient.GenerateCoverProfile(ctx)
 	if err != nil {
+		if errors.Is(err, golang.ErrNoCoverage) {
+			return nil, nil
+		}
+
 		return nil, fmt.Errorf("failed to get coverage profile: %w", err)
 	}
 

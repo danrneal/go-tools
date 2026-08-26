@@ -2,12 +2,15 @@ package golang
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
+
+var ErrNoCoverage = errors.New("no coverage profile generated")
 
 // Client provides a mockable interface for executing Go toolchain commands.
 type Client struct {
@@ -73,11 +76,7 @@ func (c *Client) GenerateCoverProfile(ctx context.Context) (string, error) {
 	coverProfile := filepath.Join(c.dir, "coverage.out")
 	stat, err := os.Stat(coverProfile)
 	if err != nil || stat.Size() == 0 {
-		return "", fmt.Errorf(
-			"failed to generate coverage profile\nTest Exit Status: %w\nTest Output:\n%s",
-			testErr,
-			string(out),
-		)
+		return "", fmt.Errorf("%w\nTest Exit Status: %w\nTest Output:\n%s", ErrNoCoverage, testErr, string(out))
 	}
 
 	return coverProfile, nil
