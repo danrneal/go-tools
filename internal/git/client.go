@@ -107,7 +107,7 @@ func (c *Client) Show(ctx context.Context, commit, relPath string) (io.Reader, e
 
 // status executes `git status -z` and returns the raw null-terminated output string.
 func (c *Client) status(ctx context.Context) (string, error) {
-	out, err := c.run(ctx, "status", "-z")
+	out, err := c.run(ctx, "status", "-z", "--untracked-files=all")
 	if err != nil {
 		return "", fmt.Errorf("failed to run git status: %w", err)
 	}

@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+// ErrNoCoverage is returned when the go test command completes but fails to generate
+// a coverage profile, typically because there were no testable packages found.
 var ErrNoCoverage = errors.New("no coverage profile generated")
 
 // Client provides a mockable interface for executing Go toolchain commands.

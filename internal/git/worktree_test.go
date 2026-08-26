@@ -117,7 +117,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 		{
 			name: "empty status string performs no actions",
 			runMock: &runMock{
-				wantArgs: []string{"status", "-z"},
+				wantArgs: []string{"status", "-z", "--untracked-files=all"},
 				out:      "",
 			},
 			setupRepo: map[string]string{
@@ -134,7 +134,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 		{
 			name: "deleted file is removed from worktree",
 			runMock: &runMock{
-				wantArgs: []string{"status", "-z"},
+				wantArgs: []string{"status", "-z", "--untracked-files=all"},
 				out:      " D deleted.go\x00",
 			},
 			setupRepo: map[string]string{},
@@ -150,7 +150,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 		{
 			name: "deleted file already missing from worktree",
 			runMock: &runMock{
-				wantArgs: []string{"status", "-z"},
+				wantArgs: []string{"status", "-z", "--untracked-files=all"},
 				out:      "D  already_missing.go\x00",
 			},
 			setupRepo:     map[string]string{},
@@ -161,7 +161,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 		{
 			name: "modified file is copied from repo to worktree",
 			runMock: &runMock{
-				wantArgs: []string{"status", "-z"},
+				wantArgs: []string{"status", "-z", "--untracked-files=all"},
 				out:      " M modified.go\x00",
 			},
 			setupRepo: map[string]string{
@@ -178,7 +178,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 		{
 			name: "copied file is created in worktree without deleting original",
 			runMock: &runMock{
-				wantArgs: []string{"status", "-z"},
+				wantArgs: []string{"status", "-z", "--untracked-files=all"},
 				out:      "C  copied.go\x00original.go\x00",
 			},
 			setupRepo: map[string]string{
@@ -196,7 +196,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 		{
 			name: "renamed file deletes old and copies new",
 			runMock: &runMock{
-				wantArgs: []string{"status", "-z"},
+				wantArgs: []string{"status", "-z", "--untracked-files=all"},
 				out:      "R  new.go\x00old.go\x00",
 			},
 			setupRepo: map[string]string{
@@ -215,7 +215,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 		{
 			name: "renamed file old file already missing",
 			runMock: &runMock{
-				wantArgs: []string{"status", "-z"},
+				wantArgs: []string{"status", "-z", "--untracked-files=all"},
 				out:      "R  new.go\x00old.go\x00",
 			},
 			setupRepo: map[string]string{
@@ -230,7 +230,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 		{
 			name: "git status fails",
 			runMock: &runMock{
-				wantArgs: []string{"status", "-z"},
+				wantArgs: []string{"status", "-z", "--untracked-files=all"},
 				err:      errors.New("git status failed"),
 			},
 			wantWorktree: map[string]string{},
@@ -239,7 +239,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 		{
 			name: "copyFile fails",
 			runMock: &runMock{
-				wantArgs: []string{"status", "-z"},
+				wantArgs: []string{"status", "-z", "--untracked-files=all"},
 				out:      "M  missing.go\x00",
 			},
 			setupRepo:    map[string]string{},
