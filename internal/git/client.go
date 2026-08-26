@@ -80,6 +80,16 @@ func withRun(run func(ctx context.Context, args ...string) ([]byte, error)) Opti
 	return setRun
 }
 
+// AddAll executes `git add -A` to stage all changes (including untracked files)
+// within the specified directory.
+func (c *Client) AddAll(ctx context.Context, dir string) error {
+	if _, err := c.run(ctx, "-C", dir, "add", "-A"); err != nil {
+		return fmt.Errorf("failed to add all files in %s: %w", dir, err)
+	}
+
+	return nil
+}
+
 // LastCommit executes `git log -1 --format=%H -- <relPath>` and returns the
 // hash of the commit that most recently modified the specified file.
 func (c *Client) LastCommit(ctx context.Context, relPath string) (string, error) {

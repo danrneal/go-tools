@@ -56,7 +56,7 @@ func NewClient(opts ...Option) (*Client, error) {
 
 		err := cmd.Run()
 		out := buf.Bytes()
-		if err != nil && !errors.As(err, &exitErr) {
+		if err != nil && (!errors.As(err, &exitErr) || exitErr.ExitCode() != 1) {
 			return out, fmt.Errorf("go-mutesting command failed: %w", err)
 		}
 

@@ -219,6 +219,11 @@ func createDirtyWorktree(ctx context.Context, gitClient *git.Client) (string, fu
 		return "", nil, fmt.Errorf("failed to sync dirty files: %w", err)
 	}
 
+	if err = gitClient.AddAll(ctx, worktree); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to stage synced files: %w", err)
+	}
+
 	return worktree, cleanup, nil
 }
 

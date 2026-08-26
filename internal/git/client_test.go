@@ -81,6 +81,49 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
+func TestClient_AddAll(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		dir     string
+		runMock *runMock
+		wantErr bool
+	}{
+		{
+			name: "successfully adds all files",
+			dir:  "/mock/worktree",
+			runMock: &runMock{
+				wantArgs: []string{"-C", "/mock/worktree", "add", "-A"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "git command fails",
+			dir:  "/mock/worktree",
+			runMock: &runMock{
+				wantArgs: []string{"-C", "/mock/worktree", "add", "-A"},
+				err:      errors.New("git crashed"),
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			client := newMockClient(ctx, t, tt.runMock)
+			err := client.AddAll(ctx, tt.dir)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("AddAll() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestClient_LastCommit(t *testing.T) {
 	t.Parallel()
 
@@ -122,11 +165,11 @@ func TestClient_LastCommit(t *testing.T) {
 			got, err := client.LastCommit(ctx, tt.relPath)
 
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("LatestCommitHash() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("LastCommit() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			if got != tt.wantHead {
-				t.Errorf("LatestCommitHash() got = %v, want %v", got, tt.wantHead)
+				t.Errorf("LastCommit() got = %v, want %v", got, tt.wantHead)
 			}
 		})
 	}
