@@ -283,7 +283,7 @@ func TestClient_SyncDirtyFiles(t *testing.T) {
 				t.Fatalf("SyncDirtyFiles() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			gotWorktree := map[string]string{}
+			gotWorktree := make(map[string]string)
 			walkFn := func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
 					return err
@@ -385,7 +385,7 @@ func TestClient_CopyFromWorktree(t *testing.T) {
 				t.Fatalf("CopyFromWorktree() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			gotRepo := map[string]string{}
+			gotRepo := make(map[string]string)
 			walkFn := func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
 					return err

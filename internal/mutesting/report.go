@@ -76,7 +76,7 @@ func (c *Client) ParseReport() (map[Mutation][]string, error) {
 		return nil, fmt.Errorf("failed to decode JSON report: %w", err)
 	}
 
-	mutations := map[Mutation][]string{}
+	mutations := make(map[Mutation][]string, len(report.Escaped))
 	for _, mutant := range report.Escaped {
 		fields := strings.Fields(mutant.ProcessOutput)
 		checksum := fields[len(fields)-1]

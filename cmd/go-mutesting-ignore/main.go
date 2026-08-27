@@ -319,7 +319,7 @@ func createBlacklist(
 	fileCoverage coverage.Files,
 	worktree string,
 ) ([]string, error) {
-	blacklist := []string{}
+	var blacklist []string
 	for mutation, checksums := range mutations {
 		if covered, ok := fileCoverage[mutation.RelPath][mutation.StartLine]; !ok || !covered {
 			blacklist = append(blacklist, checksums...)
@@ -345,7 +345,7 @@ func createInvertedIgnoreFile(
 	mutations map[mutesting.Mutation][]string,
 ) *mutesting.IgnoreFile {
 	invertedIgnoreFile := &mutesting.IgnoreFile{
-		Mutations: map[mutesting.Mutation]bool{},
+		Mutations: make(map[mutesting.Mutation]bool, len(mutations)),
 	}
 
 	for mutation := range mutations {

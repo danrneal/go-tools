@@ -34,11 +34,11 @@ func Parse(coverProfiles []*cover.Profile, modulePath string) Files {
 		modulePath += "/"
 	}
 
-	coverage := Files{}
+	coverage := make(Files)
 	for _, coverProfile := range coverProfiles {
 		relPath := strings.TrimPrefix(coverProfile.FileName, modulePath)
 		if _, ok := coverage[relPath]; !ok {
-			coverage[relPath] = map[int]bool{}
+			coverage[relPath] = make(map[int]bool)
 		}
 
 		for _, block := range coverProfile.Blocks {
@@ -55,9 +55,9 @@ func Parse(coverProfiles []*cover.Profile, modulePath string) Files {
 // It returns a list of FileReports detailing specific lines that were covered
 // in the base commit but are no longer covered in the current code.
 func (f Files) Regressions(baseCoverage Files, combinedDiff git.CombinedDiff) []FileReport {
-	regressions := []FileReport{}
-
 	currentFiles := slices.Sorted(maps.Keys(f))
+	regressions := make([]FileReport, 0, len(currentFiles))
+
 	for _, newRelPath := range currentFiles {
 		oldRelPath := newRelPath
 		fileDiff, ok := combinedDiff.ToFile[newRelPath]
@@ -70,9 +70,9 @@ func (f Files) Regressions(baseCoverage Files, combinedDiff git.CombinedDiff) []
 			continue
 		}
 
-		regressionLines := []int{}
 		coveredLines := f[newRelPath]
 		newLines := slices.Sorted(maps.Keys(coveredLines))
+		regressionLines := make([]int, 0, len(newLines))
 		for _, newLine := range newLines {
 			if coveredLines[newLine] {
 				continue
@@ -106,18 +106,18 @@ func (f Files) Regressions(baseCoverage Files, combinedDiff git.CombinedDiff) []
 // UncoveredAdditions iterates through uncovered lines in the current workspace
 // and checks if they fall within newly inserted code blocks in the git diff.
 func (f Files) UncoveredAdditions(baseCoverage Files, combinedDiff git.CombinedDiff) []FileReport {
-	uncoveredAdditions := []FileReport{}
-
 	currentFiles := slices.Sorted(maps.Keys(f))
+	uncoveredAdditions := make([]FileReport, 0, len(currentFiles))
+
 	for _, newRelPath := range currentFiles {
 		fileDiff, ok := combinedDiff.ToFile[newRelPath]
 		if !ok && baseCoverage[newRelPath] != nil {
 			continue
 		}
 
-		uncoveredAdditionLines := []int{}
 		coveredLines := f[newRelPath]
 		newLines := slices.Sorted(maps.Keys(coveredLines))
+		uncoveredAdditionLines := make([]int, 0, len(newLines))
 		for _, newLine := range newLines {
 			if coveredLines[newLine] {
 				continue
@@ -147,7 +147,7 @@ func (f Files) UncoveredAdditions(baseCoverage Files, combinedDiff git.CombinedD
 // It intelligently bridges up to a 2-line gap if the missing lines are unexecutable
 // (like blank lines or closing braces), but splits the range if any gap line is covered.
 func (f Files) FormatLineRanges(fileReport FileReport) []string {
-	fileLineRanges := []string{}
+	fileLineRanges := make([]string, 0, len(fileReport.Lines))
 
 	fileCoverage := f[fileReport.RelPath]
 	startLine := fileReport.Lines[0]

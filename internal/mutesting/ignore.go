@@ -26,7 +26,7 @@ type IgnoreFile struct {
 // ParseIgnoreFile reads and parses an ignore file, extracting the ignored mutations.
 func ParseIgnoreFile(r io.Reader) (*IgnoreFile, error) {
 	ignoreFile := &IgnoreFile{
-		Mutations: map[Mutation]bool{},
+		Mutations: make(map[Mutation]bool),
 	}
 
 	scanner := bufio.NewScanner(r)
@@ -58,7 +58,7 @@ func ParseIgnoreFile(r io.Reader) (*IgnoreFile, error) {
 // Shift applies a git diff to the ignore file, dynamically recalculating the
 // starting line numbers and file paths of all recorded mutations to match the new state.
 func (i *IgnoreFile) Shift(combinedDiff git.CombinedDiff) {
-	updatedMutations := map[Mutation]bool{}
+	updatedMutations := make(map[Mutation]bool, len(i.Mutations))
 	for mutation := range i.Mutations {
 		if fileDiff, ok := combinedDiff.FromFile[mutation.RelPath]; ok {
 			mutation.StartLine = fileDiff.ToNewLine(mutation.StartLine)
@@ -74,7 +74,7 @@ func (i *IgnoreFile) Shift(combinedDiff git.CombinedDiff) {
 // Filter prunes the ignore file, safely removing any recorded mutations that
 // no longer exist in the provided list of currently valid mutations.
 func (i *IgnoreFile) Filter(mutations map[Mutation][]string) {
-	filteredMutations := map[Mutation]bool{}
+	filteredMutations := make(map[Mutation]bool, len(i.Mutations))
 	for mutation := range i.Mutations {
 		if _, ok := mutations[mutation]; ok {
 			filteredMutations[mutation] = true
