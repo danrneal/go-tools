@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+// runMock configures expected command arguments, optional coverage output, and simulated results for tests.
 type runMock struct {
 	wantArgs      []string
 	coverProfiles *string
@@ -24,13 +25,11 @@ func TestNewClient(t *testing.T) {
 		name    string
 		opts    []Option
 		wantDir string
-		wantErr bool
 	}{
 		{
 			name:    "successful initialization",
 			opts:    []Option{WithDir("/tmp/workspace")},
 			wantDir: "/tmp/workspace",
-			wantErr: false,
 		},
 	}
 
@@ -38,17 +37,14 @@ func TestNewClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			client, err := NewClient(tt.opts...)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if tt.wantErr {
-				return
-			}
+			client := NewClient(tt.opts...)
 
 			if client.dir != tt.wantDir {
 				t.Errorf("NewClient() dir = %v, want %v", client.dir, tt.wantDir)
+			}
+
+			if client.run == nil {
+				t.Error("NewClient() run is nil")
 			}
 		})
 	}
@@ -94,6 +90,10 @@ func TestClient_ModulePath(t *testing.T) {
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("ModulePath() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
+				t.Errorf("ModulePath() error = %v, want %v", err, tt.runMock.err)
 			}
 
 			if got != tt.want {
@@ -155,6 +155,14 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 				t.Fatalf("GenerateCoverProfile() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
+			if tt.wantErr && !errors.Is(err, ErrNoCoverage) {
+				t.Errorf("GenerateCoverProfile() error = %v, want %v", err, ErrNoCoverage)
+			}
+
+			if tt.wantErr && tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
+				t.Errorf("GenerateCoverProfile() error = %v, want %v", err, tt.runMock.err)
+			}
+
 			if !tt.wantErr && got != filepath.Join(dir, "coverage.out") {
 				t.Errorf("GenerateCoverProfile() got = %v, want %v", got, filepath.Join(dir, "coverage.out"))
 			}
@@ -162,13 +170,11 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 	}
 }
 
+// newMockClient creates a Client wired to the provided runMock for unit testing without invoking go.
 func newMockClient(t *testing.T, runMock *runMock, opts ...Option) *Client {
 	t.Helper()
 
-	client, err := NewClient(opts...)
-	if err != nil {
-		t.Fatalf("failed to create mock client: %v", err)
-	}
+	client := NewClient(opts...)
 
 	run := func(ctx context.Context, args ...string) ([]byte, error) {
 		if diff := cmp.Diff(runMock.wantArgs, args); diff != "" {

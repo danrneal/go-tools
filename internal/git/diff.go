@@ -26,9 +26,9 @@ type CombinedDiff struct {
 // FileDiff contains all the modifications made to a single file, including
 // potential renames and a list of line-shifting hunks.
 type FileDiff struct {
-	OldRelPath string
-	NewRelPath string
-	Hunks      []Hunk
+	OldPath string
+	NewPath string
+	Hunks   []Hunk
 }
 
 // Hunk represents a single chunk of changes in a file as reported by a git diff.
@@ -89,14 +89,12 @@ func parseDiff(r io.Reader) (CombinedDiff, error) {
 			continue
 		}
 
-		oldRelPath := fileDiff.OldRelPath
-		if _, ok := combinedDiff.FromFile[oldRelPath]; !ok && oldRelPath != "" {
-			combinedDiff.FromFile[oldRelPath] = fileDiff
+		if fileDiff.OldPath != "" {
+			combinedDiff.FromFile[fileDiff.OldPath] = fileDiff
 		}
 
-		newRelPath := fileDiff.NewRelPath
-		if _, ok := combinedDiff.ToFile[newRelPath]; !ok && newRelPath != "" {
-			combinedDiff.ToFile[newRelPath] = fileDiff
+		if fileDiff.NewPath != "" {
+			combinedDiff.ToFile[fileDiff.NewPath] = fileDiff
 		}
 
 		matches := hunkRegex.FindStringSubmatch(line)
@@ -121,25 +119,25 @@ func parseDiff(r io.Reader) (CombinedDiff, error) {
 func parseHeader(line string, fileDiff *FileDiff) *FileDiff {
 	switch {
 	case strings.HasPrefix(line, "rename from "):
-		oldRelPath := strings.TrimPrefix(line, "rename from ")
+		oldPath := strings.TrimPrefix(line, "rename from ")
 		fileDiff = &FileDiff{
-			OldRelPath: oldRelPath,
+			OldPath: oldPath,
 		}
 	case strings.HasPrefix(line, "--- a/"):
-		oldRelPath := strings.TrimPrefix(line, "--- a/")
-		if fileDiff == nil || fileDiff.OldRelPath != oldRelPath {
+		oldPath := strings.TrimPrefix(line, "--- a/")
+		if fileDiff == nil || fileDiff.OldPath != oldPath {
 			fileDiff = &FileDiff{
-				OldRelPath: oldRelPath,
+				OldPath: oldPath,
 			}
 		}
 	case strings.HasPrefix(line, "--- /dev/null"):
 		fileDiff = &FileDiff{}
 	case strings.HasPrefix(line, "rename to "):
-		newRelPath := strings.TrimPrefix(line, "rename to ")
-		fileDiff.NewRelPath = newRelPath
+		newPath := strings.TrimPrefix(line, "rename to ")
+		fileDiff.NewPath = newPath
 	case strings.HasPrefix(line, "+++ b/"):
-		newRelPath := strings.TrimPrefix(line, "+++ b/")
-		fileDiff.NewRelPath = newRelPath
+		newPath := strings.TrimPrefix(line, "+++ b/")
+		fileDiff.NewPath = newPath
 	}
 
 	return fileDiff

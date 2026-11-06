@@ -170,8 +170,8 @@ func TestFiles_Regressions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{},
 			want: []FileReport{
 				{
-					RelPath: "main.go",
-					Lines:   []int{10},
+					Path:  "main.go",
+					Lines: []int{10},
 				},
 			},
 		},
@@ -192,8 +192,8 @@ func TestFiles_Regressions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{},
 			want: []FileReport{
 				{
-					RelPath: "main.go",
-					Lines:   []int{20},
+					Path:  "main.go",
+					Lines: []int{20},
 				},
 			},
 		},
@@ -213,8 +213,8 @@ func TestFiles_Regressions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{},
 			want: []FileReport{
 				{
-					RelPath: "main.go",
-					Lines:   []int{10},
+					Path:  "main.go",
+					Lines: []int{10},
 				},
 			},
 		},
@@ -233,8 +233,8 @@ func TestFiles_Regressions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{
 				ToFile: map[string]*git.FileDiff{
 					"new_main.go": {
-						OldRelPath: "main.go",
-						NewRelPath: "new_main.go",
+						OldPath: "main.go",
+						NewPath: "new_main.go",
 						Hunks: []git.Hunk{
 							{
 								OldStart: 5,
@@ -248,8 +248,8 @@ func TestFiles_Regressions(t *testing.T) {
 			},
 			want: []FileReport{
 				{
-					RelPath: "new_main.go",
-					Lines:   []int{12},
+					Path:  "new_main.go",
+					Lines: []int{12},
 				},
 			},
 		},
@@ -270,8 +270,8 @@ func TestFiles_Regressions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{},
 			want: []FileReport{
 				{
-					RelPath: "main.go",
-					Lines:   []int{20},
+					Path:  "main.go",
+					Lines: []int{20},
 				},
 			},
 		},
@@ -293,8 +293,8 @@ func TestFiles_Regressions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{},
 			want: []FileReport{
 				{
-					RelPath: "z_regression.go",
-					Lines:   []int{10},
+					Path:  "z_regression.go",
+					Lines: []int{10},
 				},
 			},
 		},
@@ -350,8 +350,8 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{},
 			want: []FileReport{
 				{
-					RelPath: "main.go",
-					Lines:   []int{10},
+					Path:  "main.go",
+					Lines: []int{10},
 				},
 			},
 		},
@@ -371,7 +371,7 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{
 				ToFile: map[string]*git.FileDiff{
 					"main.go": {
-						NewRelPath: "main.go",
+						NewPath: "main.go",
 						Hunks: []git.Hunk{
 							{
 								OldStart: 20,
@@ -385,8 +385,8 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 			},
 			want: []FileReport{
 				{
-					RelPath: "main.go",
-					Lines:   []int{22},
+					Path:  "main.go",
+					Lines: []int{22},
 				},
 			},
 		},
@@ -406,7 +406,7 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{
 				ToFile: map[string]*git.FileDiff{
 					"main.go": {
-						NewRelPath: "main.go",
+						NewPath: "main.go",
 						Hunks: []git.Hunk{
 							{
 								OldStart: 10,
@@ -420,8 +420,8 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 			},
 			want: []FileReport{
 				{
-					RelPath: "main.go",
-					Lines:   []int{20},
+					Path:  "main.go",
+					Lines: []int{20},
 				},
 			},
 		},
@@ -443,7 +443,7 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 			combinedDiff: git.CombinedDiff{
 				ToFile: map[string]*git.FileDiff{
 					"z_new.go": {
-						NewRelPath: "z_new.go",
+						NewPath: "z_new.go",
 						Hunks: []git.Hunk{
 							{
 								OldStart: 10,
@@ -457,8 +457,8 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 			},
 			want: []FileReport{
 				{
-					RelPath: "z_new.go",
-					Lines:   []int{10},
+					Path:  "z_new.go",
+					Lines: []int{10},
 				},
 			},
 		},
@@ -494,8 +494,8 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 				},
 			},
 			fileReport: FileReport{
-				RelPath: "main.go",
-				Lines:   []int{10},
+				Path:  "main.go",
+				Lines: []int{10},
 			},
 			want: []string{"10"},
 		},
@@ -510,8 +510,8 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 				},
 			},
 			fileReport: FileReport{
-				RelPath: "main.go",
-				Lines:   []int{10, 12, 16},
+				Path:  "main.go",
+				Lines: []int{10, 12, 16},
 			},
 			want: []string{"10", "12", "16"},
 		},
@@ -526,10 +526,25 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 				},
 			},
 			fileReport: FileReport{
-				RelPath: "main.go",
-				Lines:   []int{10, 12, 15},
+				Path:  "main.go",
+				Lines: []int{10, 12, 15},
 			},
 			want: []string{"10", "12-15"},
+		},
+		{
+			name: "gap == 2 with covered first line",
+			files: Files{
+				"main.go": {
+					10: false,
+					11: true,
+					13: false,
+				},
+			},
+			fileReport: FileReport{
+				Path:  "main.go",
+				Lines: []int{10, 13},
+			},
+			want: []string{"10", "13"},
 		},
 		{
 			name: "gap == 2 with covered second line",
@@ -541,8 +556,8 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 				},
 			},
 			fileReport: FileReport{
-				RelPath: "main.go",
-				Lines:   []int{10, 13},
+				Path:  "main.go",
+				Lines: []int{10, 13},
 			},
 			want: []string{"10", "13"},
 		},
@@ -557,8 +572,8 @@ func TestFiles_FormatLineRanges(t *testing.T) {
 				},
 			},
 			fileReport: FileReport{
-				RelPath: "main.go",
-				Lines:   []int{10, 11, 15, 16},
+				Path:  "main.go",
+				Lines: []int{10, 11, 15, 16},
 			},
 			want: []string{"10-11", "15-16"},
 		},

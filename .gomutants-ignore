@@ -1,0 +1,10 @@
+# format: path:line:column:mutatorName
+
+internal/coverage/coverage.go:69:10:BRANCH_IF
+internal/git/client.go:49:48:INTEGER_DECREMENT
+internal/git/client.go:49:48:INTEGER_INCREMENT
+internal/gomutants/ignore.go:118:37:INTEGER_DECREMENT
+internal/gomutants/ignore.go:118:37:INTEGER_INCREMENT
+internal/gomutants/report.go:150:16:BRANCH_IF
+internal/gomutants/report.go:161:43:INTEGER_DECREMENT
+internal/gomutants/report.go:161:43:INTEGER_INCREMENT

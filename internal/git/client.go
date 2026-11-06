@@ -12,33 +12,21 @@ import (
 
 // Client provides a cohesive interface for executing and parsing Git commands.
 type Client struct {
-	dir             string
 	worktreeBaseDir string
 	run             func(ctx context.Context, args ...string) ([]byte, error)
 }
 
 // NewClient initializes a new Git Client, applying any provided configuration Options.
-func NewClient(ctx context.Context, worktreeBaseDir string, opts ...Option) (*Client, error) {
-	client := &Client{
-		worktreeBaseDir: worktreeBaseDir,
-	}
+func NewClient(ctx context.Context, opts ...Option) (*Client, error) {
+	client := &Client{}
 
 	for _, opt := range opts {
 		opt(client)
 	}
 
-	if err := os.RemoveAll(client.worktreeBaseDir); err != nil {
-		return nil, fmt.Errorf("failed to clean worktree base dir: %w", err)
-	}
-
-	if err := os.MkdirAll(client.worktreeBaseDir, 0o750); err != nil {
-		return nil, fmt.Errorf("failed to create worktree base dir: %w", err)
-	}
-
 	if client.run == nil {
 		run := func(ctx context.Context, args ...string) ([]byte, error) {
 			cmd := exec.CommandContext(ctx, "git", args...)
-			cmd.Dir = client.dir
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				return out, fmt.Errorf("git command failed: %w", err)
@@ -48,6 +36,18 @@ func NewClient(ctx context.Context, worktreeBaseDir string, opts ...Option) (*Cl
 		}
 
 		client.run = run
+	}
+
+	if client.worktreeBaseDir == "" {
+		return client, nil
+	}
+
+	if err := os.RemoveAll(client.worktreeBaseDir); err != nil {
+		return nil, fmt.Errorf("failed to clean worktree base dir: %w", err)
+	}
+
+	if err := os.MkdirAll(client.worktreeBaseDir, 0o750); err != nil {
+		return nil, fmt.Errorf("failed to create worktree base dir: %w", err)
 	}
 
 	if err := client.pruneWorktrees(ctx); err != nil {
@@ -60,14 +60,13 @@ func NewClient(ctx context.Context, worktreeBaseDir string, opts ...Option) (*Cl
 // Option defines a functional configuration parameter for the Git Client.
 type Option func(*Client)
 
-// WithDir sets the working directory where the Git commands will be executed.
-// If not provided, commands run in the current working directory.
-func WithDir(dir string) Option {
-	setDir := func(c *Client) {
-		c.dir = dir
+// WithWorktreeBaseDir sets the base directory where temporary worktrees will be created.
+func WithWorktreeBaseDir(dir string) Option {
+	setWorktreeBaseDir := func(c *Client) {
+		c.worktreeBaseDir = dir
 	}
 
-	return setDir
+	return setWorktreeBaseDir
 }
 
 // withRun allows tests to inject a mock execution function, bypassing the real os/exec call.
@@ -80,20 +79,10 @@ func withRun(run func(ctx context.Context, args ...string) ([]byte, error)) Opti
 	return setRun
 }
 
-// AddAll executes `git add -A` to stage all changes (including untracked files)
-// within the specified directory.
-func (c *Client) AddAll(ctx context.Context, dir string) error {
-	if _, err := c.run(ctx, "-C", dir, "add", "-A"); err != nil {
-		return fmt.Errorf("failed to add all files in %s: %w", dir, err)
-	}
-
-	return nil
-}
-
-// LastCommit executes `git log -1 --format=%H -- <relPath>` and returns the
+// LastCommit executes `git log -1 --format=%H -- <path>` and returns the
 // hash of the commit that most recently modified the specified file.
-func (c *Client) LastCommit(ctx context.Context, relPath string) (string, error) {
-	out, err := c.run(ctx, "log", "-1", "--format=%H", "--", relPath)
+func (c *Client) LastCommit(ctx context.Context, path string) (string, error) {
+	out, err := c.run(ctx, "log", "-1", "--format=%H", "--", path)
 	if err != nil {
 		return "", fmt.Errorf("failed to run git log: %w", err)
 	}
@@ -104,8 +93,8 @@ func (c *Client) LastCommit(ctx context.Context, relPath string) (string, error)
 }
 
 // Show executes `git show` for a specific commit and file path, returning the output as an [io.Reader].
-func (c *Client) Show(ctx context.Context, commit, relPath string) (io.Reader, error) {
-	out, err := c.run(ctx, "show", fmt.Sprintf("%s:%s", commit, relPath))
+func (c *Client) Show(ctx context.Context, commit, path string) (io.Reader, error) {
+	out, err := c.run(ctx, "show", fmt.Sprintf("%s:%s", commit, path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to run git show: %w", err)
 	}
@@ -113,16 +102,4 @@ func (c *Client) Show(ctx context.Context, commit, relPath string) (io.Reader, e
 	reader := bytes.NewReader(out)
 
 	return reader, nil
-}
-
-// status executes `git status -z` and returns the raw null-terminated output string.
-func (c *Client) status(ctx context.Context) (string, error) {
-	out, err := c.run(ctx, "status", "-z", "--untracked-files=all")
-	if err != nil {
-		return "", fmt.Errorf("failed to run git status: %w", err)
-	}
-
-	status := string(out)
-
-	return status, nil
 }

@@ -21,7 +21,7 @@ type Client struct {
 }
 
 // NewClient initializes a new Go Client, applying any provided configuration Options.
-func NewClient(opts ...Option) (*Client, error) {
+func NewClient(opts ...Option) *Client {
 	client := &Client{}
 
 	for _, opt := range opts {
@@ -41,7 +41,7 @@ func NewClient(opts ...Option) (*Client, error) {
 
 	client.run = run
 
-	return client, nil
+	return client
 }
 
 // Option defines a functional configuration parameter for the Go Client.

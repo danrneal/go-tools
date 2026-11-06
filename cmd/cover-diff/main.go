@@ -36,15 +36,12 @@ func run(coverProfile, baseCommit, worktreeBaseDir string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	gitClient, err := git.NewClient(ctx, worktreeBaseDir)
+	gitClient, err := git.NewClient(ctx, git.WithWorktreeBaseDir(worktreeBaseDir))
 	if err != nil {
 		return fmt.Errorf("failed to create git client: %w", err)
 	}
 
-	goClient, err := golang.NewClient()
-	if err != nil {
-		return fmt.Errorf("failed to create go client: %w", err)
-	}
+	goClient := golang.NewClient()
 
 	coverProfiles, err := cover.ParseProfiles(coverProfile)
 	if err != nil {
@@ -89,10 +86,7 @@ func getCoverProfiles(ctx context.Context, gitClient *git.Client, commit string)
 
 	defer cleanup()
 
-	goClient, err := golang.NewClient(golang.WithDir(worktree))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create go client in worktree: %w", err)
-	}
+	goClient := golang.NewClient(golang.WithDir(worktree))
 
 	coverProfile, err := goClient.GenerateCoverProfile(ctx)
 	if err != nil {
@@ -131,7 +125,7 @@ func printReport(
 		for _, regression := range regressions {
 			lineRanges := coverageFiles.FormatLineRanges(regression)
 			for _, lineRange := range lineRanges {
-				fmt.Fprintf(os.Stdout, "%s  - %s:%s%s\n", colorRed, regression.RelPath, lineRange, colorReset)
+				fmt.Fprintf(os.Stdout, "%s  - %s:%s%s\n", colorRed, regression.Path, lineRange, colorReset)
 			}
 		}
 
@@ -144,7 +138,7 @@ func printReport(
 		for _, uncoveredAddition := range uncoveredAdditions {
 			lineRanges := coverageFiles.FormatLineRanges(uncoveredAddition)
 			for _, lineRange := range lineRanges {
-				fmt.Fprintf(os.Stdout, "%s  - %s:%s%s\n", colorYellow, uncoveredAddition.RelPath, lineRange, colorReset)
+				fmt.Fprintf(os.Stdout, "%s  - %s:%s%s\n", colorYellow, uncoveredAddition.Path, lineRange, colorReset)
 			}
 		}
 	}

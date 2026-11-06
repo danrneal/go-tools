@@ -1,6 +1,6 @@
-.PHONY: all fast update lint test build coverage gremlins go-mutesting clean
+.PHONY: all fast update lint test build coverage gomutants clean
 
-all: update lint test build coverage gremlins go-mutesting clean
+all: update lint test build coverage gomutants clean
 
 fast: lint test build coverage clean
 
@@ -11,10 +11,9 @@ update:
 	curl -sSfL -z Makefile https://raw.githubusercontent.com/danrneal/go-tools/main/Makefile -o Makefile
 	@echo "==> Installing latest CLI tools..."
 	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest
-	go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
-	go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
+	go install github.com/gomutants/gomutants@latest
 	go install github.com/danrneal/go-tools/cmd/cover-diff@latest
-	go install github.com/danrneal/go-tools/cmd/go-mutesting-ignore@latest
+	go install github.com/danrneal/go-tools/cmd/gomutants-ignore@latest
 	$(eval GO_VERSION=$(shell $(shell go env GOPATH)/bin/golangci-lint version --json | jq -r '.goVersion | sub("^go"; "")'))
 	go get go@$(GO_VERSION)
 	go get -u ./...
@@ -39,16 +38,15 @@ coverage: test
 	@echo "==> Checking coverage diff..."
 	$(shell go env GOPATH)/bin/cover-diff -coverprofile=coverage.out
 
-gremlins: build
-	@echo "==> Running gremlins..."
-	$(shell go env GOPATH)/bin/gremlins unleash --timeout-coefficient 25 --invert-assignments --invert-bitwise --invert-bwassign --invert-negatives --invert-logical --invert-loopctrl --remove-self-assignments -S lv
-
-go-mutesting: test build
-	@echo "==> Running go-mutesting (filtered)..."
-	$(shell go env GOPATH)/bin/go-mutesting-ignore -coverprofile=coverage.out
+gomutants: build
+	@echo "==> Running gomutants..."
+	$(shell go env GOPATH)/bin/gomutants --detect-equivalent --html-output=mutation-report.html ./...
+	@echo "==> Filtering ignored mutations..."
+	$(shell go env GOPATH)/bin/gomutants-ignore -htmlreport=mutation-report.html
 	@echo "==> Moving report to Downloads..."
-	mv go-mutesting-report.html ~/Downloads/go-mutesting-report.html
+	mv mutation-report.html ~/Downloads/mutation-report.html
+	rm -f mutation-report.json
 
 clean:
 	@echo "==> Cleaning up artifacts..."
-	rm -f coverage.out
+	rm -f coverage.out mutation-report.json

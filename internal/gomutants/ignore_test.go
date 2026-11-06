@@ -1,6 +1,7 @@
-package mutesting
+package gomutants
 
 import (
+	"bufio"
 	"errors"
 	"os"
 	"path/filepath"
@@ -16,10 +17,11 @@ func TestParseIgnoreFile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		content string
-		want    *IgnoreFile
-		wantErr bool
+		name      string
+		content   string
+		want      *IgnoreFile
+		wantErr   bool
+		errTarget error
 	}{
 		{
 			name:    "empty file returns empty ignore struct",
@@ -34,14 +36,15 @@ func TestParseIgnoreFile(t *testing.T) {
 			content: `
 				some random text that is not a comment or match
 				another invalid line
-				main.go:10:test/mutator
+				main.go:10:5:test/mutator
 			`,
 			want: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "test/mutator",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "test/mutator",
+						line:        10,
+						column:      5,
 					}: true,
 				},
 			},
@@ -50,26 +53,35 @@ func TestParseIgnoreFile(t *testing.T) {
 		{
 			name: "successfully parses valid ignore file with mutations",
 			content: `
-				# format: filepath:line:mutatorName
+				# format: path:line:column:mutatorName
 
-				main.go:10:branch/if
-				internal/utils.go:42:condition/negated
+				main.go:10:5:branch/if
+				internal/utils.go:42:8:condition/negated
 			`,
 			want: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "branch/if",
+						line:        10,
+						column:      5,
 					}: true,
 					{
-						Name:      "condition/negated",
-						RelPath:   "internal/utils.go",
-						StartLine: 42,
+						path:        "internal/utils.go",
+						mutatorName: "condition/negated",
+						line:        42,
+						column:      8,
 					}: true,
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name:      "returns error when scanner fails",
+			content:   strings.Repeat("a", bufio.MaxScanTokenSize),
+			want:      nil,
+			wantErr:   true,
+			errTarget: bufio.ErrTooLong,
 		},
 	}
 
@@ -82,6 +94,10 @@ func TestParseIgnoreFile(t *testing.T) {
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("ParseIgnoreFile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
+				t.Errorf("ParseIgnoreFile() error = %v, does not match target %v", err, tt.errTarget)
 			}
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
@@ -115,9 +131,10 @@ func TestIgnoreFile_Shift(t *testing.T) {
 			ignoreFile: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "branch/if",
+						line:        10,
+						column:      5,
 					}: true,
 				},
 			},
@@ -125,9 +142,10 @@ func TestIgnoreFile_Shift(t *testing.T) {
 			want: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "branch/if",
+						line:        10,
+						column:      5,
 					}: true,
 				},
 			},
@@ -137,17 +155,18 @@ func TestIgnoreFile_Shift(t *testing.T) {
 			ignoreFile: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "branch/if",
+						line:        10,
+						column:      5,
 					}: true,
 				},
 			},
 			combinedDiff: git.CombinedDiff{
 				FromFile: map[string]*git.FileDiff{
 					"main.go": {
-						OldRelPath: "main.go",
-						NewRelPath: "new_main.go",
+						OldPath: "main.go",
+						NewPath: "new_main.go",
 						Hunks: []git.Hunk{
 							{
 								OldStart: 5,
@@ -162,9 +181,10 @@ func TestIgnoreFile_Shift(t *testing.T) {
 			want: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "branch/if",
-						RelPath:   "new_main.go",
-						StartLine: 12,
+						path:        "new_main.go",
+						mutatorName: "branch/if",
+						line:        12,
+						column:      5,
 					}: true,
 				},
 			},
@@ -190,7 +210,7 @@ func TestIgnoreFile_Filter(t *testing.T) {
 	tests := []struct {
 		name       string
 		ignoreFile *IgnoreFile
-		mutations  map[Mutation][]string
+		mutations  map[Mutation]bool
 		want       *IgnoreFile
 	}{
 		{
@@ -198,7 +218,7 @@ func TestIgnoreFile_Filter(t *testing.T) {
 			ignoreFile: &IgnoreFile{
 				Mutations: map[Mutation]bool{},
 			},
-			mutations: map[Mutation][]string{},
+			mutations: map[Mutation]bool{},
 			want: &IgnoreFile{
 				Mutations: map[Mutation]bool{},
 			},
@@ -208,13 +228,14 @@ func TestIgnoreFile_Filter(t *testing.T) {
 			ignoreFile: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "branch/if",
+						line:        10,
+						column:      5,
 					}: true,
 				},
 			},
-			mutations: map[Mutation][]string{},
+			mutations: map[Mutation]bool{},
 			want: &IgnoreFile{
 				Mutations: map[Mutation]bool{},
 			},
@@ -224,25 +245,28 @@ func TestIgnoreFile_Filter(t *testing.T) {
 			ignoreFile: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "branch/if",
+						line:        10,
+						column:      5,
 					}: true,
 				},
 			},
-			mutations: map[Mutation][]string{
+			mutations: map[Mutation]bool{
 				{
-					Name:      "branch/if",
-					RelPath:   "main.go",
-					StartLine: 10,
-				}: {"checksum123"},
+					path:        "main.go",
+					mutatorName: "branch/if",
+					line:        10,
+					column:      5,
+				}: true,
 			},
 			want: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "branch/if",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "branch/if",
+						line:        10,
+						column:      5,
 					}: true,
 				},
 			},
@@ -262,7 +286,7 @@ func TestIgnoreFile_Filter(t *testing.T) {
 	}
 }
 
-func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
+func TestIgnoreFile_Write(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -280,44 +304,55 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 				Mutations: map[Mutation]bool{},
 			},
 			wantOut: `
-				# format: filepath:line:mutatorName
+				# format: path:line:column:mutatorName
 
 			`,
 		},
 		{
-			name: "populated mutations are sorted by path, line, then name",
+			name: "populated mutations are sorted by path, line, column, then name",
 			path: ".test-ignore",
 			ignoreFile: &IgnoreFile{
 				Mutations: map[Mutation]bool{
 					{
-						Name:      "b_mutator",
-						RelPath:   "internal/file.go",
-						StartLine: 20,
+						path:        "internal/file.go",
+						mutatorName: "b_mutator",
+						line:        20,
+						column:      8,
 					}: true,
 					{
-						Name:      "c_mutator",
-						RelPath:   "main.go",
-						StartLine: 30,
+						path:        "main.go",
+						mutatorName: "c_mutator",
+						line:        30,
+						column:      12,
 					}: true,
 					{
-						Name:      "a_mutator",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "a_mutator",
+						line:        10,
+						column:      9,
 					}: true,
 					{
-						Name:      "mutator",
-						RelPath:   "main.go",
-						StartLine: 10,
+						path:        "main.go",
+						mutatorName: "a_mutator",
+						line:        10,
+						column:      5,
+					}: true,
+					{
+						path:        "main.go",
+						mutatorName: "mutator",
+						line:        10,
+						column:      5,
 					}: true,
 				},
 			},
 			wantOut: `
-				# format: filepath:line:mutatorName
+				# format: path:line:column:mutatorName
 
-				internal/file.go:20:b_mutator
-				main.go:10:a_mutator
-				main.go:10:mutator
-				main.go:30:c_mutator
+				internal/file.go:20:8:b_mutator
+				main.go:10:5:a_mutator
+				main.go:10:5:mutator
+				main.go:10:9:a_mutator
+				main.go:30:12:c_mutator
 			`,
 		},
 		{
@@ -335,13 +370,13 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 
 			path := filepath.Join(t.TempDir(), tt.path)
 
-			err := tt.ignoreFile.WriteIgnoreFile(path)
+			err := tt.ignoreFile.Write(path)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("WriteIgnoreFile() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("Write() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
-				t.Errorf("WriteIgnoreFile() error = %v, does not match target %v", err, tt.errTarget)
+				t.Errorf("Write() error = %v, does not match target %v", err, tt.errTarget)
 			}
 
 			if tt.wantErr {
@@ -355,7 +390,7 @@ func TestIgnoreFile_WriteIgnoreFile(t *testing.T) {
 
 			gotOut := string(out)
 			if gotOut != trimIndent(tt.wantOut) {
-				t.Errorf("Ignore.WriteIgnoreFile() got = %v, want %v", gotOut, trimIndent(tt.wantOut))
+				t.Errorf("IgnoreFile.Write() got = %v, want %v", gotOut, trimIndent(tt.wantOut))
 			}
 		})
 	}
@@ -372,20 +407,66 @@ func Test_compareMutation(t *testing.T) {
 	}{
 		{
 			name: "different path",
-			a:    Mutation{RelPath: "a.go", StartLine: 10, Name: "mut"},
-			b:    Mutation{RelPath: "b.go", StartLine: 10, Name: "mut"},
+			a: Mutation{
+				path:        "a.go",
+				mutatorName: "mut",
+				line:        10,
+				column:      5,
+			},
+			b: Mutation{
+				path:        "b.go",
+				mutatorName: "mut",
+				line:        10,
+				column:      5,
+			},
 			want: -1,
 		},
 		{
 			name: "different start line",
-			a:    Mutation{RelPath: "a.go", StartLine: 20, Name: "mut"},
-			b:    Mutation{RelPath: "a.go", StartLine: 10, Name: "mut"},
+			a: Mutation{
+				path:        "a.go",
+				mutatorName: "mut",
+				line:        20,
+				column:      5,
+			},
+			b: Mutation{
+				path:        "a.go",
+				mutatorName: "mut",
+				line:        10,
+				column:      5,
+			},
 			want: 1,
 		},
 		{
+			name: "different column",
+			a: Mutation{
+				path:        "a.go",
+				mutatorName: "mut",
+				line:        10,
+				column:      5,
+			},
+			b: Mutation{
+				path:        "a.go",
+				mutatorName: "mut",
+				line:        10,
+				column:      9,
+			},
+			want: -1,
+		},
+		{
 			name: "different name",
-			a:    Mutation{RelPath: "a.go", StartLine: 10, Name: "a_mut"},
-			b:    Mutation{RelPath: "a.go", StartLine: 10, Name: "b_mut"},
+			a: Mutation{
+				path:        "a.go",
+				mutatorName: "a_mut",
+				line:        10,
+				column:      5,
+			},
+			b: Mutation{
+				path:        "a.go",
+				mutatorName: "b_mut",
+				line:        10,
+				column:      5,
+			},
 			want: -1,
 		},
 	}
@@ -400,4 +481,16 @@ func Test_compareMutation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// trimIndent strips a leading newline and any leading horizontal whitespace from each line of s.
+func trimIndent(s string) string {
+	s = strings.TrimPrefix(s, "\n")
+
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimLeft(line, "\t ")
+	}
+
+	return strings.Join(lines, "\n")
 }

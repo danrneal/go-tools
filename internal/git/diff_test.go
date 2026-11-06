@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bufio"
 	"errors"
 	"strings"
 	"testing"
@@ -12,12 +13,13 @@ func TestClient_Diff(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		commitA  string
-		commitB  string
-		runMock  *runMock
-		wantDiff CombinedDiff
-		wantErr  bool
+		name      string
+		commitA   string
+		commitB   string
+		runMock   *runMock
+		wantDiff  CombinedDiff
+		wantErr   bool
+		errTarget error
 	}{
 		{
 			name:    "two commits",
@@ -39,6 +41,17 @@ func TestClient_Diff(t *testing.T) {
 			},
 			wantDiff: CombinedDiff{},
 			wantErr:  true,
+		},
+		{
+			name:    "scanner fails",
+			commitA: "HEAD",
+			runMock: &runMock{
+				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
+				out:      strings.Repeat("a", bufio.MaxScanTokenSize),
+			},
+			wantDiff:  CombinedDiff{},
+			wantErr:   true,
+			errTarget: bufio.ErrTooLong,
 		},
 		{
 			name:    "empty diff output",
@@ -84,12 +97,12 @@ func TestClient_Diff(t *testing.T) {
 			wantDiff: CombinedDiff{
 				FromFile: map[string]*FileDiff{
 					"file.go": {
-						OldRelPath: "file.go",
-						NewRelPath: "newfile.go",
+						OldPath: "file.go",
+						NewPath: "newfile.go",
 					},
 					"other.go": {
-						OldRelPath: "other.go",
-						NewRelPath: "other.go",
+						OldPath: "other.go",
+						NewPath: "other.go",
 						Hunks: []Hunk{
 							{
 								OldStart: 1,
@@ -102,12 +115,12 @@ func TestClient_Diff(t *testing.T) {
 				},
 				ToFile: map[string]*FileDiff{
 					"newfile.go": {
-						OldRelPath: "file.go",
-						NewRelPath: "newfile.go",
+						OldPath: "file.go",
+						NewPath: "newfile.go",
 					},
 					"other.go": {
-						OldRelPath: "other.go",
-						NewRelPath: "other.go",
+						OldPath: "other.go",
+						NewPath: "other.go",
 						Hunks: []Hunk{
 							{
 								OldStart: 1,
@@ -140,8 +153,8 @@ func TestClient_Diff(t *testing.T) {
 			wantDiff: CombinedDiff{
 				FromFile: map[string]*FileDiff{
 					"main.go": {
-						OldRelPath: "main.go",
-						NewRelPath: "main.go",
+						OldPath: "main.go",
+						NewPath: "main.go",
 						Hunks: []Hunk{
 							{
 								OldStart: 10,
@@ -154,8 +167,8 @@ func TestClient_Diff(t *testing.T) {
 				},
 				ToFile: map[string]*FileDiff{
 					"main.go": {
-						OldRelPath: "main.go",
-						NewRelPath: "main.go",
+						OldPath: "main.go",
+						NewPath: "main.go",
 						Hunks: []Hunk{
 							{
 								OldStart: 10,
@@ -189,8 +202,8 @@ func TestClient_Diff(t *testing.T) {
 				FromFile: map[string]*FileDiff{},
 				ToFile: map[string]*FileDiff{
 					"new.go": {
-						OldRelPath: "",
-						NewRelPath: "new.go",
+						OldPath: "",
+						NewPath: "new.go",
 						Hunks: []Hunk{
 							{
 								OldStart: 0,
@@ -221,8 +234,8 @@ func TestClient_Diff(t *testing.T) {
 			wantDiff: CombinedDiff{
 				FromFile: map[string]*FileDiff{
 					"main.go": {
-						OldRelPath: "main.go",
-						NewRelPath: "main.go",
+						OldPath: "main.go",
+						NewPath: "main.go",
 						Hunks: []Hunk{
 							{
 								OldStart: 10,
@@ -235,8 +248,8 @@ func TestClient_Diff(t *testing.T) {
 				},
 				ToFile: map[string]*FileDiff{
 					"main.go": {
-						OldRelPath: "main.go",
-						NewRelPath: "main.go",
+						OldPath: "main.go",
+						NewPath: "main.go",
 						Hunks: []Hunk{
 							{
 								OldStart: 10,
@@ -269,8 +282,8 @@ func TestClient_Diff(t *testing.T) {
 			wantDiff: CombinedDiff{
 				FromFile: map[string]*FileDiff{
 					"main.go": {
-						OldRelPath: "main.go",
-						NewRelPath: "main.go",
+						OldPath: "main.go",
+						NewPath: "main.go",
 						Hunks: []Hunk{
 							{
 								OldStart: 10,
@@ -283,8 +296,8 @@ func TestClient_Diff(t *testing.T) {
 				},
 				ToFile: map[string]*FileDiff{
 					"main.go": {
-						OldRelPath: "main.go",
-						NewRelPath: "main.go",
+						OldPath: "main.go",
+						NewPath: "main.go",
 						Hunks: []Hunk{
 							{
 								OldStart: 10,
@@ -310,6 +323,14 @@ func TestClient_Diff(t *testing.T) {
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Diff() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
+				t.Errorf("Diff() error = %v, want %v", err, tt.errTarget)
+			}
+
+			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
+				t.Errorf("Diff() error = %v, want %v", err, tt.runMock.err)
 			}
 
 			if diff := cmp.Diff(tt.wantDiff, gotDiff); diff != "" {
@@ -589,6 +610,7 @@ func TestFileDiff_IsAddition(t *testing.T) {
 	}
 }
 
+// trimIndent strips a leading newline and any leading horizontal whitespace from each line of s.
 func trimIndent(s string) string {
 	s = strings.TrimPrefix(s, "\n")
 

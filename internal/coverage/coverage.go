@@ -16,19 +16,19 @@ import (
 const maxGapSize = 2
 
 // Files represents line-by-line test coverage across multiple files.
-// The outer map key is the relative file path. The inner map key is the
+// The outer map key is the file path. The inner map key is the
 // line number, and the boolean value indicates whether that line was executed.
 type Files map[string]map[int]bool
 
-// FileReport encapsulates a relative file path and a list of specific
+// FileReport encapsulates a file path and a list of specific
 // line numbers within that file that require attention (e.g., regressions).
 type FileReport struct {
-	RelPath string
-	Lines   []int
+	Path  string
+	Lines []int
 }
 
 // Parse converts a slice of parsed Go coverage profiles into a simpler,
-// faster-to-query coverage map, dynamically stripping the module prefix from relative paths.
+// faster-to-query coverage map, dynamically stripping the module prefix from file paths.
 func Parse(coverProfiles []*cover.Profile, modulePath string) Files {
 	if !strings.HasSuffix(modulePath, "/") {
 		modulePath += "/"
@@ -36,14 +36,14 @@ func Parse(coverProfiles []*cover.Profile, modulePath string) Files {
 
 	coverage := make(Files)
 	for _, coverProfile := range coverProfiles {
-		relPath := strings.TrimPrefix(coverProfile.FileName, modulePath)
-		if _, ok := coverage[relPath]; !ok {
-			coverage[relPath] = make(map[int]bool)
+		path := strings.TrimPrefix(coverProfile.FileName, modulePath)
+		if _, ok := coverage[path]; !ok {
+			coverage[path] = make(map[int]bool)
 		}
 
 		for _, block := range coverProfile.Blocks {
 			for line := block.StartLine; line <= block.EndLine; line++ {
-				coverage[relPath][line] = coverage[relPath][line] || block.Count > 0
+				coverage[path][line] = coverage[path][line] || block.Count > 0
 			}
 		}
 	}
@@ -58,19 +58,19 @@ func (f Files) Regressions(baseCoverage Files, combinedDiff git.CombinedDiff) []
 	currentFiles := slices.Sorted(maps.Keys(f))
 	regressions := make([]FileReport, 0, len(currentFiles))
 
-	for _, newRelPath := range currentFiles {
-		oldRelPath := newRelPath
-		fileDiff, ok := combinedDiff.ToFile[newRelPath]
+	for _, newPath := range currentFiles {
+		oldPath := newPath
+		fileDiff, ok := combinedDiff.ToFile[newPath]
 		if ok {
-			oldRelPath = fileDiff.OldRelPath
+			oldPath = fileDiff.OldPath
 		}
 
-		oldLines, ok := baseCoverage[oldRelPath]
+		oldLines, ok := baseCoverage[oldPath]
 		if !ok {
 			continue
 		}
 
-		coveredLines := f[newRelPath]
+		coveredLines := f[newPath]
 		newLines := slices.Sorted(maps.Keys(coveredLines))
 		regressionLines := make([]int, 0, len(newLines))
 		for _, newLine := range newLines {
@@ -83,7 +83,7 @@ func (f Files) Regressions(baseCoverage Files, combinedDiff git.CombinedDiff) []
 				oldLine = fileDiff.ToOldLine(newLine)
 			}
 
-			if covered, ok := oldLines[oldLine]; !ok || !covered {
+			if !oldLines[oldLine] {
 				continue
 			}
 
@@ -92,8 +92,8 @@ func (f Files) Regressions(baseCoverage Files, combinedDiff git.CombinedDiff) []
 
 		if len(regressionLines) > 0 {
 			regression := FileReport{
-				RelPath: newRelPath,
-				Lines:   regressionLines,
+				Path:  newPath,
+				Lines: regressionLines,
 			}
 
 			regressions = append(regressions, regression)
@@ -109,13 +109,13 @@ func (f Files) UncoveredAdditions(baseCoverage Files, combinedDiff git.CombinedD
 	currentFiles := slices.Sorted(maps.Keys(f))
 	uncoveredAdditions := make([]FileReport, 0, len(currentFiles))
 
-	for _, newRelPath := range currentFiles {
-		fileDiff, ok := combinedDiff.ToFile[newRelPath]
-		if !ok && baseCoverage[newRelPath] != nil {
+	for _, newPath := range currentFiles {
+		fileDiff, ok := combinedDiff.ToFile[newPath]
+		if !ok && baseCoverage[newPath] != nil {
 			continue
 		}
 
-		coveredLines := f[newRelPath]
+		coveredLines := f[newPath]
 		newLines := slices.Sorted(maps.Keys(coveredLines))
 		uncoveredAdditionLines := make([]int, 0, len(newLines))
 		for _, newLine := range newLines {
@@ -132,8 +132,8 @@ func (f Files) UncoveredAdditions(baseCoverage Files, combinedDiff git.CombinedD
 
 		if len(uncoveredAdditionLines) > 0 {
 			uncoveredAddition := FileReport{
-				RelPath: newRelPath,
-				Lines:   uncoveredAdditionLines,
+				Path:  newPath,
+				Lines: uncoveredAdditionLines,
 			}
 
 			uncoveredAdditions = append(uncoveredAdditions, uncoveredAddition)
@@ -149,7 +149,7 @@ func (f Files) UncoveredAdditions(baseCoverage Files, combinedDiff git.CombinedD
 func (f Files) FormatLineRanges(fileReport FileReport) []string {
 	fileLineRanges := make([]string, 0, len(fileReport.Lines))
 
-	fileCoverage := f[fileReport.RelPath]
+	fileCoverage := f[fileReport.Path]
 	startLine := fileReport.Lines[0]
 	prevLine := startLine
 	for _, line := range fileReport.Lines {

@@ -9,6 +9,7 @@
 go.work
 
 # Project Specific
+.gomutants-cache.json
 bin/
 
 # Documentation (Allow README only)
