@@ -71,11 +71,11 @@ func run(htmlReport string) error {
 
 	fmt.Fprintf(
 		os.Stdout,
-		"%sIgnored %d mutations (%d unignored survived mutations remaining).%s\n",
+		"%s%d survived mutations remaining%s (%d ignored).\n",
 		color,
-		ignoredCount,
 		remainingCount,
 		colorReset,
+		ignoredCount,
 	)
 
 	return nil
