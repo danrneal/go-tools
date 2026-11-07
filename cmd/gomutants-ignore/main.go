@@ -11,8 +11,14 @@ import (
 	"github.com/danrneal/go-tools/internal/gomutants"
 )
 
-// ignoreFilename is the default name for the mutation testing ignore file.
-const ignoreFilename = ".gomutants-ignore"
+const (
+	// ignoreFilename is the default name for the mutation testing ignore file.
+	ignoreFilename = ".gomutants-ignore"
+
+	colorReset = "\033[0m"
+	colorRed   = "\033[31m"
+	colorGreen = "\033[32m"
+)
 
 func main() {
 	htmlReport := flag.String("htmlreport", "mutation-report.html", "Path to current HTML mutation report")
@@ -58,12 +64,18 @@ func run(htmlReport string) error {
 
 	ignoredCount := len(ignoreFile.Mutations)
 	remainingCount := len(survivedMutations) - ignoredCount
+	color := colorGreen
+	if remainingCount > 0 {
+		color = colorRed
+	}
 
 	fmt.Fprintf(
 		os.Stdout,
-		"Ignored %d mutations (%d unignored survived mutations remaining).\n",
+		"%sIgnored %d mutations (%d unignored survived mutations remaining).%s\n",
+		color,
 		ignoredCount,
 		remainingCount,
+		colorReset,
 	)
 
 	return nil
