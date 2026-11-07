@@ -26,7 +26,7 @@ lint:
 
 test:
 	@echo "==> Running tests..."
-	go test -coverprofile=coverage.out ./...
+	go test -race -coverprofile=coverage.out ./...
 
 build:
 	@echo "==> Building binary..."
