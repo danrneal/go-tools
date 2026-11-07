@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 // runMock configures expected command arguments and simulated output for testing Client commands.
@@ -36,14 +37,12 @@ func TestNewClient(t *testing.T) {
 		opts                []Option
 		runMock             *runMock
 		wantWorktreeBaseDir string
-		wantErr             bool
-		errTarget           error
+		wantErr             error
 	}{
 		{
 			name:                "default initialization",
 			opts:                nil,
 			wantWorktreeBaseDir: "",
-			wantErr:             false,
 		},
 		{
 			name: "successful initialization",
@@ -54,7 +53,6 @@ func TestNewClient(t *testing.T) {
 				wantArgs: []string{"worktree", "prune"},
 			},
 			wantWorktreeBaseDir: testWorktreeBaseDir,
-			wantErr:             false,
 		},
 		{
 			name: "clean worktree base dir fails",
@@ -64,8 +62,7 @@ func TestNewClient(t *testing.T) {
 			runMock: &runMock{
 				wantArgs: []string{"worktree", "prune"},
 			},
-			wantErr:   true,
-			errTarget: syscall.EINVAL,
+			wantErr: syscall.EINVAL,
 		},
 		{
 			name: "create worktree base dir fails",
@@ -75,8 +72,7 @@ func TestNewClient(t *testing.T) {
 			runMock: &runMock{
 				wantArgs: []string{"worktree", "prune"},
 			},
-			wantErr:   true,
-			errTarget: fs.ErrPermission,
+			wantErr: fs.ErrPermission,
 		},
 		{
 			name: "prune worktrees fails",
@@ -88,7 +84,7 @@ func TestNewClient(t *testing.T) {
 				err:      errors.New("simulated git prune failure"),
 			},
 			wantWorktreeBaseDir: "",
-			wantErr:             true,
+			wantErr:             cmpopts.AnyError,
 		},
 	}
 
@@ -116,19 +112,15 @@ func TestNewClient(t *testing.T) {
 			}
 
 			client, err := NewClient(t.Context(), opts...)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
-				t.Errorf("NewClient() error = %v, want %v", err, tt.errTarget)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("NewClient() error mismatch (-want +got):\n%s", diff)
 			}
 
 			if tt.runMock != nil && tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
 				t.Errorf("NewClient() error = %v, want %v", err, tt.runMock.err)
 			}
 
-			if tt.wantErr {
+			if tt.wantErr != nil {
 				return
 			}
 
@@ -151,7 +143,7 @@ func TestClient_LastCommit(t *testing.T) {
 		path     string
 		runMock  *runMock
 		wantHead string
-		wantErr  bool
+		wantErr  error
 	}{
 		{
 			name: "successfully retrieves and trims commit",
@@ -161,7 +153,6 @@ func TestClient_LastCommit(t *testing.T) {
 				out:      " a1b2c3d4e5f6 \n",
 			},
 			wantHead: "a1b2c3d4e5f6",
-			wantErr:  false,
 		},
 		{
 			name: "git command fails",
@@ -171,7 +162,7 @@ func TestClient_LastCommit(t *testing.T) {
 				err:      errors.New("git crashed"),
 			},
 			wantHead: "",
-			wantErr:  true,
+			wantErr:  cmpopts.AnyError,
 		},
 	}
 
@@ -183,8 +174,8 @@ func TestClient_LastCommit(t *testing.T) {
 			client := newMockClient(ctx, t, tt.runMock)
 			got, err := client.LastCommit(ctx, tt.path)
 
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("LastCommit() error = %v, wantErr %v", err, tt.wantErr)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("LastCommit() error mismatch (-want +got):\n%s", diff)
 			}
 
 			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
@@ -207,7 +198,7 @@ func TestClient_Show(t *testing.T) {
 		path    string
 		runMock *runMock
 		wantOut string
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name:   "valid execution",
@@ -218,7 +209,6 @@ func TestClient_Show(t *testing.T) {
 				out:      "file contents",
 			},
 			wantOut: "file contents",
-			wantErr: false,
 		},
 		{
 			name:   "git command fails",
@@ -229,7 +219,7 @@ func TestClient_Show(t *testing.T) {
 				err:      errors.New("git crashed"),
 			},
 			wantOut: "",
-			wantErr: true,
+			wantErr: cmpopts.AnyError,
 		},
 	}
 
@@ -241,15 +231,15 @@ func TestClient_Show(t *testing.T) {
 			client := newMockClient(ctx, t, tt.runMock)
 			reader, err := client.Show(ctx, tt.commit, tt.path)
 
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Show() error = %v, wantErr %v", err, tt.wantErr)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("Show() error mismatch (-want +got):\n%s", diff)
 			}
 
 			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
 				t.Errorf("Show() error = %v, want %v", err, tt.runMock.err)
 			}
 
-			if tt.wantErr {
+			if tt.wantErr != nil {
 				return
 			}
 

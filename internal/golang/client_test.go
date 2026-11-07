@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 // runMock configures expected command arguments, optional coverage output, and simulated results for tests.
@@ -57,7 +58,7 @@ func TestClient_ModulePath(t *testing.T) {
 		name    string
 		runMock *runMock
 		want    string
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name: "valid execution",
@@ -66,8 +67,7 @@ func TestClient_ModulePath(t *testing.T) {
 				out:      "github.com/example/repo\n",
 				err:      nil,
 			},
-			want:    "github.com/example/repo",
-			wantErr: false,
+			want: "github.com/example/repo",
 		},
 		{
 			name: "command fails",
@@ -77,7 +77,7 @@ func TestClient_ModulePath(t *testing.T) {
 				err:      errors.New("go command failed"),
 			},
 			want:    "",
-			wantErr: true,
+			wantErr: cmpopts.AnyError,
 		},
 	}
 
@@ -88,8 +88,8 @@ func TestClient_ModulePath(t *testing.T) {
 			client := newMockClient(t, tt.runMock)
 			got, err := client.ModulePath(t.Context())
 
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ModulePath() error = %v, wantErr %v", err, tt.wantErr)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("ModulePath() error mismatch (-want +got):\n%s", diff)
 			}
 
 			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
@@ -109,7 +109,7 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 	tests := []struct {
 		name    string
 		runMock *runMock
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name: "valid execution",
@@ -119,7 +119,6 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 				out:           "ok\n",
 				err:           nil,
 			},
-			wantErr: false,
 		},
 		{
 			name: "tests failed and profile missing",
@@ -128,7 +127,7 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 				out:      "build failed\n",
 				err:      errors.New("exit status 1"),
 			},
-			wantErr: true,
+			wantErr: cmpopts.AnyError,
 		},
 		{
 			name: "tests passed but profile is empty",
@@ -138,7 +137,7 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 				out:           "ok\n",
 				err:           nil,
 			},
-			wantErr: true,
+			wantErr: cmpopts.AnyError,
 		},
 	}
 
@@ -151,19 +150,19 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 			client := newMockClient(t, tt.runMock, WithDir(dir))
 			got, err := client.GenerateCoverProfile(t.Context())
 
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("GenerateCoverProfile() error = %v, wantErr %v", err, tt.wantErr)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("GenerateCoverProfile() error mismatch (-want +got):\n%s", diff)
 			}
 
-			if tt.wantErr && !errors.Is(err, ErrNoCoverage) {
+			if tt.wantErr != nil && !errors.Is(err, ErrNoCoverage) {
 				t.Errorf("GenerateCoverProfile() error = %v, want %v", err, ErrNoCoverage)
 			}
 
-			if tt.wantErr && tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
+			if tt.wantErr != nil && tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
 				t.Errorf("GenerateCoverProfile() error = %v, want %v", err, tt.runMock.err)
 			}
 
-			if !tt.wantErr && got != filepath.Join(dir, "coverage.out") {
+			if tt.wantErr == nil && got != filepath.Join(dir, "coverage.out") {
 				t.Errorf("GenerateCoverProfile() got = %v, want %v", got, filepath.Join(dir, "coverage.out"))
 			}
 		})

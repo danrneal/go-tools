@@ -2,7 +2,6 @@ package gomutants
 
 import (
 	"bufio"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,17 +10,17 @@ import (
 
 	"github.com/danrneal/go-tools/internal/git"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestParseIgnoreFile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		content   string
-		want      *IgnoreFile
-		wantErr   bool
-		errTarget error
+		name    string
+		content string
+		want    *IgnoreFile
+		wantErr error
 	}{
 		{
 			name:    "empty file returns empty ignore struct",
@@ -29,7 +28,6 @@ func TestParseIgnoreFile(t *testing.T) {
 			want: &IgnoreFile{
 				Mutations: map[Mutation]bool{},
 			},
-			wantErr: false,
 		},
 		{
 			name: "invalid lines are safely ignored and loop continues",
@@ -48,7 +46,6 @@ func TestParseIgnoreFile(t *testing.T) {
 					}: true,
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "successfully parses valid ignore file with mutations",
@@ -74,14 +71,12 @@ func TestParseIgnoreFile(t *testing.T) {
 					}: true,
 				},
 			},
-			wantErr: false,
 		},
 		{
-			name:      "returns error when scanner fails",
-			content:   strings.Repeat("a", bufio.MaxScanTokenSize),
-			want:      nil,
-			wantErr:   true,
-			errTarget: bufio.ErrTooLong,
+			name:    "returns error when scanner fails",
+			content: strings.Repeat("a", bufio.MaxScanTokenSize),
+			want:    nil,
+			wantErr: bufio.ErrTooLong,
 		},
 	}
 
@@ -92,12 +87,8 @@ func TestParseIgnoreFile(t *testing.T) {
 			reader := strings.NewReader(trimIndent(tt.content))
 			got, err := ParseIgnoreFile(reader)
 
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ParseIgnoreFile() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
-				t.Errorf("ParseIgnoreFile() error = %v, does not match target %v", err, tt.errTarget)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("ParseIgnoreFile() error mismatch (-want +got):\n%s", diff)
 			}
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
@@ -294,8 +285,7 @@ func TestIgnoreFile_Write(t *testing.T) {
 		ignoreFile *IgnoreFile
 		path       string
 		wantOut    string
-		wantErr    bool
-		errTarget  error
+		wantErr    error
 	}{
 		{
 			name: "empty mutations writes only headers",
@@ -359,8 +349,7 @@ func TestIgnoreFile_Write(t *testing.T) {
 			name:       "returns error when file creation fails",
 			path:       "",
 			ignoreFile: &IgnoreFile{},
-			wantErr:    true,
-			errTarget:  syscall.EISDIR,
+			wantErr:    syscall.EISDIR,
 		},
 	}
 
@@ -371,15 +360,11 @@ func TestIgnoreFile_Write(t *testing.T) {
 			path := filepath.Join(t.TempDir(), tt.path)
 
 			err := tt.ignoreFile.Write(path)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Write() error = %v, wantErr %v", err, tt.wantErr)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("Write() error mismatch (-want +got):\n%s", diff)
 			}
 
-			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
-				t.Errorf("Write() error = %v, does not match target %v", err, tt.errTarget)
-			}
-
-			if tt.wantErr {
+			if tt.wantErr != nil {
 				return
 			}
 

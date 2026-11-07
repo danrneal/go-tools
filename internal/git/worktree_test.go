@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestClient_CreateWorktree(t *testing.T) {
@@ -20,28 +21,25 @@ func TestClient_CreateWorktree(t *testing.T) {
 		worktreeBaseDir string
 		commit          string
 		runErr          error
-		wantErr         bool
-		errTarget       error
+		wantErr         error
 	}{
 		{
 			name:            "valid commit creates worktree and cleans up successfully",
 			worktreeBaseDir: t.TempDir(),
 			commit:          "HEAD",
-			wantErr:         false,
 		},
 		{
 			name:            "missing base dir returns error",
 			worktreeBaseDir: filepath.Join(t.TempDir(), "missing"),
 			commit:          "HEAD",
-			wantErr:         true,
-			errTarget:       fs.ErrNotExist,
+			wantErr:         fs.ErrNotExist,
 		},
 		{
 			name:            "invalid commit returns error and cleans up immediately",
 			worktreeBaseDir: t.TempDir(),
 			commit:          "invalid-branch-name",
 			runErr:          errors.New("git worktree failed"),
-			wantErr:         true,
+			wantErr:         cmpopts.AnyError,
 		},
 	}
 
@@ -77,12 +75,8 @@ func TestClient_CreateWorktree(t *testing.T) {
 
 			worktree, cleanup, err := client.CreateWorktree(ctx, tt.commit)
 
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("CreateWorktree() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
-				t.Errorf("CreateWorktree() error = %v, want %v", err, tt.errTarget)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("CreateWorktree() error mismatch (-want +got):\n%s", diff)
 			}
 
 			if tt.runErr != nil && !errors.Is(err, tt.runErr) {

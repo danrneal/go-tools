@@ -10,19 +10,29 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
+
+type syntaxError struct{}
+
+func (syntaxError) Error() string {
+	return "json syntax error"
+}
+
+func (syntaxError) Is(target error) bool {
+	_, ok := errors.AsType[*json.SyntaxError](target)
+	return ok
+}
 
 func TestParseHTMLReport(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		path          string
-		htmlReport    string
-		want          *Report
-		wantErr       bool
-		errTarget     error
-		wantSyntaxErr bool
+		name       string
+		path       string
+		htmlReport string
+		want       *Report
+		wantErr    error
 	}{
 		{
 			name: "successfully parses valid HTML report",
@@ -109,25 +119,23 @@ func TestParseHTMLReport(t *testing.T) {
 				prefix: []byte("<html>\n<body>\n"),
 				suffix: []byte("\n</body>\n</html>\n"),
 			},
-			wantErr: false,
 		},
 		{
-			name:      "returns error when HTML report is missing",
-			path:      filepath.Join(t.TempDir(), "missing.html"),
-			wantErr:   true,
-			errTarget: fs.ErrNotExist,
+			name:    "returns error when HTML report is missing",
+			path:    filepath.Join(t.TempDir(), "missing.html"),
+			wantErr: fs.ErrNotExist,
 		},
 		{
 			name:       "returns error when opening script tag is missing",
 			path:       filepath.Join(t.TempDir(), "mutation-report.html"),
 			htmlReport: `<html><body></body></html>`,
-			wantErr:    true,
+			wantErr:    cmpopts.AnyError,
 		},
 		{
 			name:       "returns error when closing script tag is missing",
 			path:       filepath.Join(t.TempDir(), "mutation-report.html"),
 			htmlReport: "<html><body>" + scriptOpenTag + "{}",
-			wantErr:    true,
+			wantErr:    cmpopts.AnyError,
 		},
 		{
 			name: "returns error when embedded JSON is invalid",
@@ -141,8 +149,7 @@ func TestParseHTMLReport(t *testing.T) {
 					</body>
 				</html>
 			`,
-			wantErr:       true,
-			wantSyntaxErr: true,
+			wantErr: syntaxError{},
 		},
 	}
 
@@ -158,22 +165,11 @@ func TestParseHTMLReport(t *testing.T) {
 			}
 
 			got, err := ParseHTMLReport(tt.path)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ParseHTMLReport() error = %v, wantErr %v", err, tt.wantErr)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("ParseHTMLReport() error mismatch (-want +got):\n%s", diff)
 			}
 
-			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
-				t.Errorf("ParseHTMLReport() error = %v, want %v", err, tt.errTarget)
-			}
-
-			if tt.wantSyntaxErr {
-				_, ok := errors.AsType[*json.SyntaxError](err)
-				if !ok {
-					t.Errorf("ParseHTMLReport() error = %v, want syntax error", err)
-				}
-			}
-
-			if tt.wantErr {
+			if tt.wantErr != nil {
 				return
 			}
 
@@ -518,12 +514,11 @@ func TestReport_Write(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		report    *Report
-		path      string
-		wantOut   string
-		wantErr   bool
-		errTarget error
+		name    string
+		report  *Report
+		path    string
+		wantOut string
+		wantErr error
 	}{
 		{
 			name: "successfully writes HTML report",
@@ -551,11 +546,10 @@ func TestReport_Write(t *testing.T) {
 				`</body></html>`,
 		},
 		{
-			name:      "returns error when file write fails",
-			path:      "",
-			report:    &Report{},
-			wantErr:   true,
-			errTarget: syscall.EISDIR,
+			name:    "returns error when file write fails",
+			path:    "",
+			report:  &Report{},
+			wantErr: syscall.EISDIR,
 		},
 	}
 
@@ -566,15 +560,11 @@ func TestReport_Write(t *testing.T) {
 			path := filepath.Join(t.TempDir(), tt.path)
 
 			err := tt.report.Write(path)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Write() error = %v, wantErr %v", err, tt.wantErr)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("Write() error mismatch (-want +got):\n%s", diff)
 			}
 
-			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
-				t.Errorf("Write() error = %v, want %v", err, tt.errTarget)
-			}
-
-			if tt.wantErr {
+			if tt.wantErr != nil {
 				return
 			}
 

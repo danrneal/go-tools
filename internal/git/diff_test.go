@@ -7,19 +7,19 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestClient_Diff(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		commitA   string
-		commitB   string
-		runMock   *runMock
-		wantDiff  CombinedDiff
-		wantErr   bool
-		errTarget error
+		name     string
+		commitA  string
+		commitB  string
+		runMock  *runMock
+		wantDiff CombinedDiff
+		wantErr  error
 	}{
 		{
 			name:    "two commits",
@@ -30,7 +30,6 @@ func TestClient_Diff(t *testing.T) {
 				out:      "",
 			},
 			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
-			wantErr:  false,
 		},
 		{
 			name:    "underlying git command fails",
@@ -40,7 +39,7 @@ func TestClient_Diff(t *testing.T) {
 				err:      errors.New("fatal: not a git repository"),
 			},
 			wantDiff: CombinedDiff{},
-			wantErr:  true,
+			wantErr:  cmpopts.AnyError,
 		},
 		{
 			name:    "scanner fails",
@@ -49,9 +48,8 @@ func TestClient_Diff(t *testing.T) {
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
 				out:      strings.Repeat("a", bufio.MaxScanTokenSize),
 			},
-			wantDiff:  CombinedDiff{},
-			wantErr:   true,
-			errTarget: bufio.ErrTooLong,
+			wantDiff: CombinedDiff{},
+			wantErr:  bufio.ErrTooLong,
 		},
 		{
 			name:    "empty diff output",
@@ -61,7 +59,6 @@ func TestClient_Diff(t *testing.T) {
 				out:      "",
 			},
 			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
-			wantErr:  false,
 		},
 		{
 			name:    "file mode change only (no hunks)",
@@ -75,7 +72,6 @@ func TestClient_Diff(t *testing.T) {
 				`),
 			},
 			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
-			wantErr:  false,
 		},
 		{
 			name:    "pure file rename (no hunks)",
@@ -132,7 +128,6 @@ func TestClient_Diff(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name:    "single file with one hunk (omitted counts default to 1)",
@@ -180,7 +175,6 @@ func TestClient_Diff(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name:    "newly added file (from /dev/null)",
@@ -215,7 +209,6 @@ func TestClient_Diff(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name:    "omitted new count only",
@@ -261,7 +254,6 @@ func TestClient_Diff(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name:    "omitted old count only",
@@ -309,7 +301,6 @@ func TestClient_Diff(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 	}
 
@@ -321,12 +312,8 @@ func TestClient_Diff(t *testing.T) {
 			client := newMockClient(ctx, t, tt.runMock)
 			gotDiff, err := client.Diff(ctx, tt.commitA, tt.commitB)
 
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Diff() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if tt.errTarget != nil && !errors.Is(err, tt.errTarget) {
-				t.Errorf("Diff() error = %v, want %v", err, tt.errTarget)
+			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
+				t.Fatalf("Diff() error mismatch (-want +got):\n%s", diff)
 			}
 
 			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
