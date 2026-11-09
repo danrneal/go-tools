@@ -335,7 +335,6 @@ linters:
     staticcheck:
       checks:
         - all
-        - -ST1000
 
     tagalign:
       order:

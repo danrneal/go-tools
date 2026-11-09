@@ -1,3 +1,4 @@
+// Package git executes Git commands, parses unified diffs, and manages temporary worktrees.
 package git
 
 import (

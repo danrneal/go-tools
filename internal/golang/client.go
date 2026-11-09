@@ -1,3 +1,4 @@
+// Package golang executes Go toolchain commands for module inspection and coverage generation.
 package golang
 
 import (

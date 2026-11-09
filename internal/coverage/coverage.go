@@ -1,3 +1,4 @@
+// Package coverage parses Go coverage profiles and detects line coverage regressions.
 package coverage
 
 import (

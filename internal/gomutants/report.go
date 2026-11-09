@@ -1,3 +1,4 @@
+// Package gomutants parses and filters Stryker HTML mutation testing reports using ignore files.
 package gomutants
 
 import (
