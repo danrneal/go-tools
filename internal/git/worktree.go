@@ -39,6 +39,7 @@ func (c *Client) addWorktree(ctx context.Context, worktree, commit string) error
 
 // removeWorktree executes the git command to forcefully remove a worktree.
 func (c *Client) removeWorktree(ctx context.Context, worktree string) {
+	//nolint:errcheck // best-effort cleanup
 	_, _ = c.run(ctx, "worktree", "remove", "--force", worktree)
 }
 

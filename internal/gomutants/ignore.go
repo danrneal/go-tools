@@ -49,7 +49,9 @@ func ParseIgnoreFile(r io.Reader) (*IgnoreFile, error) {
 			continue
 		}
 
+		//nolint:errcheck // mutatorPattern guarantees digits
 		mutationLine, _ := strconv.Atoi(matches[2])
+		//nolint:errcheck // mutatorPattern guarantees digits
 		mutationColumn, _ := strconv.Atoi(matches[3])
 
 		mutation := Mutation{

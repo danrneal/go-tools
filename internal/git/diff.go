@@ -146,17 +146,21 @@ func parseHeader(line string, fileDiff *FileDiff) *FileDiff {
 // parseHunk converts regex matches from a diff hunk header into a Hunk struct.
 // It handles omitted counts in unified diffs by defaulting them to 1.
 func parseHunk(matches []string) Hunk {
+	//nolint:errcheck // hunkRegex guarantees digits
 	oldStart, _ := strconv.Atoi(matches[1])
 
 	oldCount := 1
 	if matches[2] != "" {
+		//nolint:errcheck // hunkRegex guarantees digits
 		oldCount, _ = strconv.Atoi(matches[2])
 	}
 
+	//nolint:errcheck // hunkRegex guarantees digits
 	newStart, _ := strconv.Atoi(matches[3])
 
 	newCount := 1
 	if matches[4] != "" {
+		//nolint:errcheck // hunkRegex guarantees digits
 		newCount, _ = strconv.Atoi(matches[4])
 	}
 

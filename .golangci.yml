@@ -166,6 +166,7 @@ linters:
       forbid-mutex: true
 
     errcheck:
+      check-blank: true
       check-type-assertions: true
       exclude-functions:
         - (*database/sql.Tx).Rollback
