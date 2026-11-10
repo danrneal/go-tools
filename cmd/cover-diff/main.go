@@ -48,7 +48,7 @@ func run(coverProfile, baseCommit, worktreeBaseDir string) error {
 		return fmt.Errorf("error parsing coverage profile: %w", err)
 	}
 
-	baseCoverProfiles, err := getCoverProfiles(ctx, gitClient, baseCommit)
+	baseCoverProfiles, err := generateCoverProfiles(ctx, gitClient, baseCommit)
 	if err != nil {
 		return err
 	}
@@ -75,10 +75,10 @@ func run(coverProfile, baseCommit, worktreeBaseDir string) error {
 	return nil
 }
 
-// getCoverProfiles creates a temporary git worktree at the specified baseCommit,
+// generateCoverProfiles creates a temporary git worktree at the specified baseCommit,
 // runs the test suite within that isolated environment to generate a coverage
 // profile, and parses the resulting file before cleaning up the worktree.
-func getCoverProfiles(ctx context.Context, gitClient *git.Client, commit string) ([]*cover.Profile, error) {
+func generateCoverProfiles(ctx context.Context, gitClient *git.Client, commit string) ([]*cover.Profile, error) {
 	worktree, cleanup, err := gitClient.CreateWorktree(ctx, commit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create worktree: %w", err)
