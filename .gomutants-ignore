@@ -3,8 +3,8 @@
 internal/coverage/coverage.go:70:10:BRANCH_IF
 internal/git/client.go:50:48:INTEGER_DECREMENT
 internal/git/client.go:50:48:INTEGER_INCREMENT
-internal/gomutants/ignore.go:118:37:INTEGER_DECREMENT
-internal/gomutants/ignore.go:118:37:INTEGER_INCREMENT
+internal/gomutants/ignore.go:120:37:INTEGER_DECREMENT
+internal/gomutants/ignore.go:120:37:INTEGER_INCREMENT
 internal/gomutants/report.go:151:16:BRANCH_IF
 internal/gomutants/report.go:162:43:INTEGER_DECREMENT
 internal/gomutants/report.go:162:43:INTEGER_INCREMENT
