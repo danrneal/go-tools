@@ -326,6 +326,7 @@ linters:
         - name: superfluous-else
         - name: time-naming
         - name: unconditional-recursion
+        - name: unused-receiver
         - name: useless-break
 
     rowserrcheck:
