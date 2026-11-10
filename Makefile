@@ -11,11 +11,7 @@ update:
 	curl -sSfL -z Makefile https://raw.githubusercontent.com/danrneal/go-tools/main/Makefile -o Makefile
 	@echo "==> Installing latest CLI tools..."
 	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest
-# TODO: Revert to `go install github.com/gomutants/gomutants@latest` once the dark-theme background PR lands.
-	tmp=$$(mktemp -d) && \
-		git clone -q --depth 1 -b fix/html-dark-theme-background https://github.com/danrneal/gomutants.git "$$tmp" && \
-		go -C "$$tmp" install . && \
-		rm -rf "$$tmp"
+	go install github.com/gomutants/gomutants@latest
 	go install github.com/danrneal/go-tools/cmd/cover-diff@latest
 	go install github.com/danrneal/go-tools/cmd/gomutants-ignore@latest
 	$(eval GO_VERSION=$(shell $(shell go env GOPATH)/bin/golangci-lint version --json | jq -r '.goVersion | sub("^go"; "")'))
