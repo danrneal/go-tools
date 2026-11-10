@@ -321,6 +321,9 @@ linters:
         - name: import-shadowing
         - name: max-control-nesting
         - name: modifies-value-receiver
+        - name: receiver-naming
+          arguments:
+            - maxLength: 3
         - name: redundant-import-alias
         - name: redundant-test-main-exit
         - name: superfluous-else
