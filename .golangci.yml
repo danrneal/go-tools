@@ -307,6 +307,7 @@ linters:
         - name: context-as-argument
         - name: deep-exit
         - name: defer
+        - name: dot-imports
         - name: early-return
           arguments: ["allow-jump"]
         - name: enforce-repeated-arg-type-style
