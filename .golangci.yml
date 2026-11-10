@@ -299,6 +299,7 @@ linters:
       rules:
         - name: argument-limit
           arguments: [5]
+        - name: blank-imports
         - name: call-to-gc
         - name: comment-spacings
         - name: confusing-naming
