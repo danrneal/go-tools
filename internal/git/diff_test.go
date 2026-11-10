@@ -2,7 +2,6 @@ package git
 
 import (
 	"bufio"
-	"errors"
 	"strings"
 	"testing"
 
@@ -29,17 +28,20 @@ func TestClient_Diff(t *testing.T) {
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "base-commit", "HEAD"},
 				out:      "",
 			},
-			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
+			wantDiff: CombinedDiff{
+				FromFile: map[string]*FileDiff{},
+				ToFile:   map[string]*FileDiff{},
+			},
 		},
 		{
 			name:    "underlying git command fails",
 			commitA: "HEAD",
 			runMock: &runMock{
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
-				err:      errors.New("fatal: not a git repository"),
+				err:      errMockRun,
 			},
 			wantDiff: CombinedDiff{},
-			wantErr:  cmpopts.AnyError,
+			wantErr:  errMockRun,
 		},
 		{
 			name:    "scanner fails",
@@ -58,7 +60,10 @@ func TestClient_Diff(t *testing.T) {
 				wantArgs: []string{"diff", "-U0", "-M", "--no-ext-diff", "HEAD"},
 				out:      "",
 			},
-			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
+			wantDiff: CombinedDiff{
+				FromFile: map[string]*FileDiff{},
+				ToFile:   map[string]*FileDiff{},
+			},
 		},
 		{
 			name:    "file mode change only (no hunks)",
@@ -71,7 +76,10 @@ func TestClient_Diff(t *testing.T) {
 					new mode 100755
 				`),
 			},
-			wantDiff: CombinedDiff{FromFile: map[string]*FileDiff{}, ToFile: map[string]*FileDiff{}},
+			wantDiff: CombinedDiff{
+				FromFile: map[string]*FileDiff{},
+				ToFile:   map[string]*FileDiff{},
+			},
 		},
 		{
 			name:    "pure file rename (no hunks)",
@@ -314,10 +322,6 @@ func TestClient_Diff(t *testing.T) {
 
 			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
 				t.Fatalf("Diff() error mismatch (-want +got):\n%s", diff)
-			}
-
-			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
-				t.Errorf("Diff() error = %v, want %v", err, tt.runMock.err)
 			}
 
 			if diff := cmp.Diff(tt.wantDiff, gotDiff); diff != "" {

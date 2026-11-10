@@ -13,12 +13,15 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+// syntaxError is a test sentinel that matches any [json.SyntaxError] via [errors.Is].
 type syntaxError struct{}
 
+// Error returns a static description for test failure output.
 func (syntaxError) Error() string {
 	return "json syntax error"
 }
 
+// Is reports whether target wraps a [json.SyntaxError].
 func (syntaxError) Is(target error) bool {
 	_, ok := errors.AsType[*json.SyntaxError](target)
 	return ok

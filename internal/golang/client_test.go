@@ -28,8 +28,10 @@ func TestNewClient(t *testing.T) {
 		wantDir string
 	}{
 		{
-			name:    "successful initialization",
-			opts:    []Option{WithDir("/tmp/workspace")},
+			name: "successful initialization",
+			opts: []Option{
+				WithDir("/tmp/workspace"),
+			},
 			wantDir: "/tmp/workspace",
 		},
 	}
@@ -54,6 +56,8 @@ func TestNewClient(t *testing.T) {
 func TestClient_ModulePath(t *testing.T) {
 	t.Parallel()
 
+	errMockRun := errors.New("go command failed")
+
 	tests := []struct {
 		name    string
 		runMock *runMock
@@ -74,10 +78,10 @@ func TestClient_ModulePath(t *testing.T) {
 			runMock: &runMock{
 				wantArgs: []string{"list", "-m"},
 				out:      "",
-				err:      errors.New("go command failed"),
+				err:      errMockRun,
 			},
 			want:    "",
-			wantErr: cmpopts.AnyError,
+			wantErr: errMockRun,
 		},
 	}
 
@@ -90,10 +94,6 @@ func TestClient_ModulePath(t *testing.T) {
 
 			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
 				t.Fatalf("ModulePath() error mismatch (-want +got):\n%s", diff)
-			}
-
-			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
-				t.Errorf("ModulePath() error = %v, want %v", err, tt.runMock.err)
 			}
 
 			if got != tt.want {
@@ -127,7 +127,7 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 				out:      "build failed\n",
 				err:      errors.New("exit status 1"),
 			},
-			wantErr: cmpopts.AnyError,
+			wantErr: ErrNoCoverage,
 		},
 		{
 			name: "tests passed but profile is empty",
@@ -137,7 +137,7 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 				out:           "ok\n",
 				err:           nil,
 			},
-			wantErr: cmpopts.AnyError,
+			wantErr: ErrNoCoverage,
 		},
 	}
 
@@ -152,10 +152,6 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 
 			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
 				t.Fatalf("GenerateCoverProfile() error mismatch (-want +got):\n%s", diff)
-			}
-
-			if tt.wantErr != nil && !errors.Is(err, ErrNoCoverage) {
-				t.Errorf("GenerateCoverProfile() error = %v, want %v", err, ErrNoCoverage)
 			}
 
 			if tt.wantErr != nil && tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {

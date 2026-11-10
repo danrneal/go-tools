@@ -38,8 +38,8 @@ func TestClient_CreateWorktree(t *testing.T) {
 			name:            "invalid commit returns error and cleans up immediately",
 			worktreeBaseDir: t.TempDir(),
 			commit:          "invalid-branch-name",
-			runErr:          errors.New("git worktree failed"),
-			wantErr:         cmpopts.AnyError,
+			runErr:          errMockRun,
+			wantErr:         errMockRun,
 		},
 	}
 
@@ -77,10 +77,6 @@ func TestClient_CreateWorktree(t *testing.T) {
 
 			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
 				t.Fatalf("CreateWorktree() error mismatch (-want +got):\n%s", diff)
-			}
-
-			if tt.runErr != nil && !errors.Is(err, tt.runErr) {
-				t.Errorf("CreateWorktree() error = %v, want %v", err, tt.runErr)
 			}
 
 			if err != nil {

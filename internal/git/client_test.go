@@ -14,6 +14,9 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+// errMockRun is a sentinel error returned by simulated git commands in tests.
+var errMockRun = errors.New("mock git command failure")
+
 // runMock configures expected command arguments and simulated output for testing Client commands.
 type runMock struct {
 	wantArgs []string
@@ -81,10 +84,10 @@ func TestNewClient(t *testing.T) {
 			},
 			runMock: &runMock{
 				wantArgs: []string{"worktree", "prune"},
-				err:      errors.New("simulated git prune failure"),
+				err:      errMockRun,
 			},
 			wantWorktreeBaseDir: "",
-			wantErr:             cmpopts.AnyError,
+			wantErr:             errMockRun,
 		},
 	}
 
@@ -114,10 +117,6 @@ func TestNewClient(t *testing.T) {
 			client, err := NewClient(t.Context(), opts...)
 			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
 				t.Fatalf("NewClient() error mismatch (-want +got):\n%s", diff)
-			}
-
-			if tt.runMock != nil && tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
-				t.Errorf("NewClient() error = %v, want %v", err, tt.runMock.err)
 			}
 
 			if tt.wantErr != nil {
@@ -159,10 +158,10 @@ func TestClient_LastCommit(t *testing.T) {
 			path: ".gomutants-ignore",
 			runMock: &runMock{
 				wantArgs: []string{"log", "-1", "--format=%H", "--", ".gomutants-ignore"},
-				err:      errors.New("git crashed"),
+				err:      errMockRun,
 			},
 			wantHead: "",
-			wantErr:  cmpopts.AnyError,
+			wantErr:  errMockRun,
 		},
 	}
 
@@ -176,10 +175,6 @@ func TestClient_LastCommit(t *testing.T) {
 
 			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
 				t.Fatalf("LastCommit() error mismatch (-want +got):\n%s", diff)
-			}
-
-			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
-				t.Errorf("LastCommit() error = %v, want %v", err, tt.runMock.err)
 			}
 
 			if got != tt.wantHead {
@@ -216,10 +211,10 @@ func TestClient_Show(t *testing.T) {
 			path:   "missing.go",
 			runMock: &runMock{
 				wantArgs: []string{"show", "HEAD:missing.go"},
-				err:      errors.New("git crashed"),
+				err:      errMockRun,
 			},
 			wantOut: "",
-			wantErr: cmpopts.AnyError,
+			wantErr: errMockRun,
 		},
 	}
 
@@ -233,10 +228,6 @@ func TestClient_Show(t *testing.T) {
 
 			if diff := cmp.Diff(tt.wantErr, err, cmpopts.EquateErrors()); diff != "" {
 				t.Fatalf("Show() error mismatch (-want +got):\n%s", diff)
-			}
-
-			if tt.runMock.err != nil && !errors.Is(err, tt.runMock.err) {
-				t.Errorf("Show() error = %v, want %v", err, tt.runMock.err)
 			}
 
 			if tt.wantErr != nil {
