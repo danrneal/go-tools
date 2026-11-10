@@ -312,6 +312,7 @@ linters:
           arguments: ["allow-jump"]
         - name: enforce-repeated-arg-type-style
           arguments: ["short"]
+        - name: exported
         - name: filename-format
         - name: flag-parameter
         - name: function-result-limit
