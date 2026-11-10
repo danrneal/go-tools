@@ -303,6 +303,7 @@ linters:
         - name: comment-spacings
         - name: confusing-naming
         - name: confusing-results
+        - name: context-as-argument
         - name: deep-exit
         - name: defer
         - name: early-return
