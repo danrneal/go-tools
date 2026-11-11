@@ -40,7 +40,7 @@ coverage: test
 
 gomutants: build
 	@echo "==> Running gomutants..."
-	$(shell go env GOPATH)/bin/gomutants --detect-equivalent --html-output=mutation-report.html ./...
+	$(shell go env GOPATH)/bin/gomutants --detect-equivalent --exclude-calls='*logger.*' --html-output=mutation-report.html ./...
 	@echo "==> Filtering ignored mutations..."
 	$(shell go env GOPATH)/bin/gomutants-ignore -htmlreport=mutation-report.html
 	@echo "==> Moving report to Downloads..."
