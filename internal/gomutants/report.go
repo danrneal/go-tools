@@ -147,10 +147,7 @@ func (r *Report) Ignore(mutations Mutations) {
 
 // Write marshals the updated report JSON and writes the reassembled HTML document to path.
 func (r *Report) Write(path string) error {
-	jsonReport, err := json.Marshal(r)
-	if err != nil {
-		return fmt.Errorf("failed to marshal report: %w", err)
-	}
+	jsonReport, _ := json.Marshal(r)
 
 	filters := enabledFiltersPattern.Find(r.prefix)
 	filters = bytes.ReplaceAll(filters, []byte(",`NoCoverage`"), nil)
