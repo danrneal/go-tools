@@ -125,10 +125,8 @@ func parseHeader(line string, fileDiff *FileDiff) *FileDiff {
 		}
 	case strings.HasPrefix(line, "--- a/"):
 		oldPath := strings.TrimPrefix(line, "--- a/")
-		if fileDiff == nil || fileDiff.OldPath != oldPath {
-			fileDiff = &FileDiff{
-				OldPath: oldPath,
-			}
+		fileDiff = &FileDiff{
+			OldPath: oldPath,
 		}
 	case strings.HasPrefix(line, "--- /dev/null"):
 		fileDiff = &FileDiff{}
