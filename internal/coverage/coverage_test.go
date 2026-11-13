@@ -356,6 +356,40 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 			},
 		},
 		{
+			name: "new uncovered line in modified file is reported",
+			files: Files{
+				"main.go": {
+					10: false,
+				},
+			},
+			baseCoverage: Files{
+				"main.go": {
+					1: true,
+				},
+			},
+			combinedDiff: git.CombinedDiff{
+				ToFile: map[string]*git.FileDiff{
+					"main.go": {
+						NewPath: "main.go",
+						Hunks: []git.Hunk{
+							{
+								OldStart: 10,
+								OldCount: 0,
+								NewStart: 10,
+								NewCount: 2,
+							},
+						},
+					},
+				},
+			},
+			want: []FileReport{
+				{
+					Path:  "main.go",
+					Lines: []int{10},
+				},
+			},
+		},
+		{
 			name: "uncovered line outside of new hunks is ignored",
 			files: Files{
 				"main.go": {
@@ -363,11 +397,7 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 					22: false,
 				},
 			},
-			baseCoverage: Files{
-				"main.go": {
-					10: false,
-				},
-			},
+			baseCoverage: Files{},
 			combinedDiff: git.CombinedDiff{
 				ToFile: map[string]*git.FileDiff{
 					"main.go": {
@@ -398,11 +428,7 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 					20: false,
 				},
 			},
-			baseCoverage: Files{
-				"main.go": {
-					5: true,
-				},
-			},
+			baseCoverage: Files{},
 			combinedDiff: git.CombinedDiff{
 				ToFile: map[string]*git.FileDiff{
 					"main.go": {

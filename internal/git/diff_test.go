@@ -404,6 +404,21 @@ func TestFileDiff_ToNewLine(t *testing.T) {
 			wantNewLine: 10,
 		},
 		{
+			name: "target line deleted inside hunk",
+			fileDiff: FileDiff{
+				Hunks: []Hunk{
+					{
+						OldStart: 5,
+						OldCount: 3,
+						NewStart: 4,
+						NewCount: 0,
+					},
+				},
+			},
+			oldLine:     6,
+			wantNewLine: -1,
+		},
+		{
 			name: "target line deleted at start of hunk",
 			fileDiff: FileDiff{
 				Hunks: []Hunk{
@@ -503,6 +518,21 @@ func TestFileDiff_ToOldLine(t *testing.T) {
 			},
 			newLine:     10,
 			wantOldLine: 10,
+		},
+		{
+			name: "target line added inside hunk",
+			fileDiff: FileDiff{
+				Hunks: []Hunk{
+					{
+						OldStart: 5,
+						OldCount: 0,
+						NewStart: 5,
+						NewCount: 3,
+					},
+				},
+			},
+			newLine:     6,
+			wantOldLine: -1,
 		},
 		{
 			name: "target line added at start of hunk",
