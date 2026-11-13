@@ -26,13 +26,15 @@ lint:
 
 test:
 	@echo "==> Running tests..."
-	go test -race -coverprofile=coverage.out ./...
+	go test -race ./...
 
 build:
 	@echo "==> Building binary..."
 	go build -o bin/ ./cmd/...
 
-coverage: test
+coverage:
+	@echo "==> Running coverage..."
+	go test -covermode=set -coverprofile=coverage.out ./...
 	@echo "==> Generating HTML report..."
 	go tool cover -html=coverage.out -o ~/Downloads/coverage.html
 	@echo "==> Checking coverage diff..."
