@@ -42,7 +42,16 @@ coverage:
 
 gomutants: build
 	@echo "==> Running gomutants..."
-	$(shell go env GOPATH)/bin/gomutants --detect-equivalent --exclude-calls='*logger.*' --html-output=mutation-report.html ./...
+	$(eval CPUS=$(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2))
+	$(shell go env GOPATH)/bin/gomutants \
+		--workers=$$(( ($(CPUS) + 1) / 2 )) \
+		--test-cpu=1 \
+		--timeout-min=15s \
+		--timeout-coefficient=20 \
+		--detect-equivalent \
+		--exclude-calls='*logger.*' \
+		--html-output=mutation-report.html \
+		./...
 	@echo "==> Filtering ignored mutations..."
 	$(shell go env GOPATH)/bin/gomutants-ignore -htmlreport=mutation-report.html
 	@echo "==> Moving report to Downloads..."
