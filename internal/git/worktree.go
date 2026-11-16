@@ -11,7 +11,7 @@ import (
 func (c *Client) CreateWorktree(ctx context.Context, commit string) (dir string, cleanup func(), err error) {
 	worktree, err := os.MkdirTemp(c.worktreeBaseDir, "worktree-*")
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to create temp dir for worktree: %w", err)
+		return "", nil, fmt.Errorf("create worktree temp dir: %w", err)
 	}
 
 	if err = c.addWorktree(ctx, worktree, commit); err != nil {
@@ -31,7 +31,7 @@ func (c *Client) CreateWorktree(ctx context.Context, commit string) (dir string,
 // addWorktree executes the git command to add a new detached worktree.
 func (c *Client) addWorktree(ctx context.Context, worktree, commit string) error {
 	if _, err := c.run(ctx, "worktree", "add", "--detach", worktree, commit); err != nil {
-		return fmt.Errorf("failed to run git worktree add: %w", err)
+		return fmt.Errorf("run git worktree add: %w", err)
 	}
 
 	return nil
@@ -47,7 +47,7 @@ func (c *Client) removeWorktree(ctx context.Context, worktree string) {
 // that references directories that no longer exist on disk.
 func (c *Client) pruneWorktrees(ctx context.Context) error {
 	if _, err := c.run(ctx, "worktree", "prune"); err != nil {
-		return fmt.Errorf("failed to run git worktree prune: %w", err)
+		return fmt.Errorf("run git worktree prune: %w", err)
 	}
 
 	return nil

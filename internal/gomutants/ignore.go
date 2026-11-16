@@ -65,7 +65,7 @@ func ParseIgnoreFile(r io.Reader) (*IgnoreFile, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to scan ignore file: %w", err)
+		return nil, fmt.Errorf("scan ignore file: %w", err)
 	}
 
 	return ignoreFile, nil
@@ -118,7 +118,7 @@ func (i *IgnoreFile) Write(path string) error {
 	}
 
 	if err := os.WriteFile(path, data, 0o600); err != nil {
-		return fmt.Errorf("failed to write ignore file: %w", err)
+		return fmt.Errorf("write ignore file: %w", err)
 	}
 
 	return nil

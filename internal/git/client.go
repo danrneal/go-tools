@@ -30,7 +30,7 @@ func NewClient(ctx context.Context, opts ...Option) (*Client, error) {
 			cmd := exec.CommandContext(ctx, "git", args...)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				return out, fmt.Errorf("git command failed: %w", err)
+				return out, fmt.Errorf("run git command: %w", err)
 			}
 
 			return out, nil
@@ -44,11 +44,11 @@ func NewClient(ctx context.Context, opts ...Option) (*Client, error) {
 	}
 
 	if err := os.RemoveAll(client.worktreeBaseDir); err != nil {
-		return nil, fmt.Errorf("failed to clean worktree base dir: %w", err)
+		return nil, fmt.Errorf("clean worktree base dir: %w", err)
 	}
 
 	if err := os.MkdirAll(client.worktreeBaseDir, 0o750); err != nil {
-		return nil, fmt.Errorf("failed to create worktree base dir: %w", err)
+		return nil, fmt.Errorf("create worktree base dir: %w", err)
 	}
 
 	if err := client.pruneWorktrees(ctx); err != nil {
@@ -85,7 +85,7 @@ func withRun(run func(ctx context.Context, args ...string) ([]byte, error)) Opti
 func (c *Client) LastCommit(ctx context.Context, path string) (string, error) {
 	out, err := c.run(ctx, "log", "-1", "--format=%H", "--", path)
 	if err != nil {
-		return "", fmt.Errorf("failed to run git log: %w", err)
+		return "", fmt.Errorf("run git log: %w", err)
 	}
 
 	commitHash := strings.TrimSpace(string(out))
@@ -97,7 +97,7 @@ func (c *Client) LastCommit(ctx context.Context, path string) (string, error) {
 func (c *Client) Show(ctx context.Context, commit, path string) (io.Reader, error) {
 	out, err := c.run(ctx, "show", fmt.Sprintf("%s:%s", commit, path))
 	if err != nil {
-		return nil, fmt.Errorf("failed to run git show: %w", err)
+		return nil, fmt.Errorf("run git show: %w", err)
 	}
 
 	reader := bytes.NewReader(out)

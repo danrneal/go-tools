@@ -34,7 +34,7 @@ func NewClient(opts ...Option) *Client {
 		cmd.Dir = client.dir
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			return out, fmt.Errorf("go command failed: %w", err)
+			return out, fmt.Errorf("run go command: %w", err)
 		}
 
 		return out, nil
@@ -62,7 +62,7 @@ func WithDir(dir string) Option {
 func (c *Client) ModulePath(ctx context.Context) (string, error) {
 	out, err := c.run(ctx, "list", "-m")
 	if err != nil {
-		return "", fmt.Errorf("failed to get module path: %w", err)
+		return "", fmt.Errorf("list module path: %w", err)
 	}
 
 	modulePath := strings.TrimSpace(string(out))

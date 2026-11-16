@@ -38,14 +38,14 @@ func run(coverProfile, baseCommit, worktreeBaseDir string) error {
 
 	gitClient, err := git.NewClient(ctx, git.WithWorktreeBaseDir(worktreeBaseDir))
 	if err != nil {
-		return fmt.Errorf("failed to create git client: %w", err)
+		return fmt.Errorf("create git client: %w", err)
 	}
 
 	goClient := golang.NewClient()
 
 	coverProfiles, err := cover.ParseProfiles(coverProfile)
 	if err != nil {
-		return fmt.Errorf("error parsing coverage profile: %w", err)
+		return fmt.Errorf("parse coverage profile: %w", err)
 	}
 
 	baseCoverProfiles, err := generateCoverProfiles(ctx, gitClient, baseCommit)
@@ -55,7 +55,7 @@ func run(coverProfile, baseCommit, worktreeBaseDir string) error {
 
 	modulePath, err := goClient.ModulePath(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get module path: %w", err)
+		return fmt.Errorf("query module path: %w", err)
 	}
 
 	coverageFiles := coverage.Parse(coverProfiles, modulePath)
@@ -63,7 +63,7 @@ func run(coverProfile, baseCommit, worktreeBaseDir string) error {
 
 	combinedDiff, err := gitClient.Diff(ctx, baseCommit, "")
 	if err != nil {
-		return fmt.Errorf("failed to parse git diff: %w", err)
+		return fmt.Errorf("parse git diff: %w", err)
 	}
 
 	regressions := coverageFiles.Regressions(baseCoverageFiles, combinedDiff)
@@ -81,7 +81,7 @@ func run(coverProfile, baseCommit, worktreeBaseDir string) error {
 func generateCoverProfiles(ctx context.Context, gitClient *git.Client, commit string) ([]*cover.Profile, error) {
 	worktree, cleanup, err := gitClient.CreateWorktree(ctx, commit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create worktree: %w", err)
+		return nil, fmt.Errorf("create worktree: %w", err)
 	}
 
 	defer cleanup()
@@ -94,12 +94,12 @@ func generateCoverProfiles(ctx context.Context, gitClient *git.Client, commit st
 			return nil, nil
 		}
 
-		return nil, fmt.Errorf("failed to get coverage profile: %w", err)
+		return nil, fmt.Errorf("generate coverage profile: %w", err)
 	}
 
 	coverProfiles, err := cover.ParseProfiles(coverProfile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse generated profiles: %w", err)
+		return nil, fmt.Errorf("parse base coverage profile: %w", err)
 	}
 
 	return coverProfiles, nil

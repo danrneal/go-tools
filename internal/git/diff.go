@@ -65,7 +65,7 @@ func (c *Client) runDiff(ctx context.Context, commitA, commitB string) ([]byte, 
 
 	out, err := c.run(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run git diff: %w", err)
+		return nil, fmt.Errorf("run git diff: %w", err)
 	}
 
 	return out, nil
@@ -107,7 +107,7 @@ func parseDiff(r io.Reader) (CombinedDiff, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return CombinedDiff{}, fmt.Errorf("failed to scan diff: %w", err)
+		return CombinedDiff{}, fmt.Errorf("scan diff: %w", err)
 	}
 
 	return combinedDiff, nil

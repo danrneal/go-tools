@@ -33,7 +33,7 @@ func run(htmlReport string) error {
 
 	gitClient, err := git.NewClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create git client: %w", err)
+		return fmt.Errorf("create git client: %w", err)
 	}
 
 	ignoreFile, err := parseIgnoreFile()
@@ -43,7 +43,7 @@ func run(htmlReport string) error {
 
 	report, err := gomutants.ParseHTMLReport(htmlReport)
 	if err != nil {
-		return fmt.Errorf("failed to parse HTML report: %w", err)
+		return fmt.Errorf("parse HTML report: %w", err)
 	}
 
 	survivedMutations := report.SurvivedMutations()
@@ -85,14 +85,14 @@ func run(htmlReport string) error {
 func parseIgnoreFile() (*gomutants.IgnoreFile, error) {
 	file, err := os.OpenFile(ignoreFilename, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open or create %s: %w", ignoreFilename, err)
+		return nil, fmt.Errorf("open ignore file: %w", err)
 	}
 
 	defer file.Close()
 
 	ignoreFile, err := gomutants.ParseIgnoreFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse ignore file: %w", err)
+		return nil, fmt.Errorf("parse ignore file: %w", err)
 	}
 
 	return ignoreFile, nil
@@ -109,7 +109,7 @@ func updateIgnoreFile(
 	if err != nil || lastCommit == "" {
 		ignoreFile.Filter(mutations)
 		if err = ignoreFile.Write(ignoreFilename); err != nil {
-			return fmt.Errorf("failed to save updated ignore file: %w", err)
+			return fmt.Errorf("write initial ignore file: %w", err)
 		}
 
 		return nil
@@ -122,14 +122,14 @@ func updateIgnoreFile(
 
 	lastCommitCombinedDiff, err := gitClient.Diff(ctx, lastCommit, "HEAD")
 	if err != nil {
-		return fmt.Errorf("failed to get ${LAST_SYNCED_COMMIT}...HEAD diffs: %w", err)
+		return fmt.Errorf("diff %s...HEAD: %w", lastCommit, err)
 	}
 
 	lastCommitIgnoreFile.Shift(lastCommitCombinedDiff)
 
 	combinedDiff, err := gitClient.Diff(ctx, "HEAD", "")
 	if err != nil {
-		return fmt.Errorf("failed to get HEAD...Dirty diffs: %w", err)
+		return fmt.Errorf("diff HEAD...dirty: %w", err)
 	}
 
 	lastCommitIgnoreFile.Shift(combinedDiff)
@@ -144,7 +144,7 @@ func updateIgnoreFile(
 
 	*ignoreFile = *lastCommitIgnoreFile
 	if err = ignoreFile.Write(ignoreFilename); err != nil {
-		return fmt.Errorf("failed to save updated ignore file: %w", err)
+		return fmt.Errorf("write shifted ignore file: %w", err)
 	}
 
 	return nil
@@ -154,12 +154,12 @@ func updateIgnoreFile(
 func parseIgnoreFileAtCommit(ctx context.Context, gitClient *git.Client, commit string) (*gomutants.IgnoreFile, error) {
 	file, err := gitClient.Show(ctx, commit, ignoreFilename)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch ignore file from %s: %w", commit, err)
+		return nil, fmt.Errorf("fetch ignore file at %s: %w", commit, err)
 	}
 
 	ignoreFile, err := gomutants.ParseIgnoreFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse ignore file from %s: %w", commit, err)
+		return nil, fmt.Errorf("parse ignore file at %s: %w", commit, err)
 	}
 
 	return ignoreFile, nil
@@ -170,7 +170,7 @@ func updateHTMLReport(report *gomutants.Report, path string, mutations gomutants
 	report.Ignore(mutations)
 
 	if err := report.Write(path); err != nil {
-		return fmt.Errorf("failed to write HTML report: %w", err)
+		return fmt.Errorf("write HTML report: %w", err)
 	}
 
 	return nil

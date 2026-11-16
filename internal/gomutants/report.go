@@ -76,13 +76,13 @@ type position struct {
 func ParseHTMLReport(path string) (*Report, error) {
 	htmlReport, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read HTML report: %w", err)
+		return nil, fmt.Errorf("read HTML report: %w", err)
 	}
 
 	prefix, jsonReport, _ := bytes.Cut(htmlReport, []byte(scriptOpenTag))
 	jsonReport, suffix, ok := bytes.Cut(jsonReport, []byte(scriptCloseTag))
 	if !ok {
-		return nil, errors.New("failed to find mutation-report-data script tag")
+		return nil, errors.New("missing mutation-report-data script tag")
 	}
 
 	var report Report
@@ -91,7 +91,7 @@ func ParseHTMLReport(path string) (*Report, error) {
 
 	err = json.Unmarshal(jsonReport, &report)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal report: %w", err)
+		return nil, fmt.Errorf("unmarshal report: %w", err)
 	}
 
 	return &report, nil
@@ -157,7 +157,7 @@ func (r *Report) Write(path string) error {
 	htmlReport := slices.Concat(prefix, []byte(scriptOpenTag), jsonReport, []byte(scriptCloseTag), r.suffix)
 
 	if err := os.WriteFile(path, htmlReport, 0o600); err != nil {
-		return fmt.Errorf("failed to write HTML report: %w", err)
+		return fmt.Errorf("write HTML report: %w", err)
 	}
 
 	return nil
