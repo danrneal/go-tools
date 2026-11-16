@@ -324,6 +324,7 @@ linters:
         - name: function-result-limit
         - name: get-return
         - name: if-return
+        - name: import-alias-naming
         - name: import-shadowing
         - name: max-control-nesting
         - name: modifies-value-receiver
