@@ -236,6 +236,9 @@ linters:
         - no-unused-link
         - require-stdlib-doclink
 
+    godot:
+      scope: all
+
     gosec:
       excludes:
         - G117
