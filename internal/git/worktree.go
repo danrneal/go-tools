@@ -8,18 +8,18 @@ import (
 
 // CreateWorktree creates a temporary detached git worktree at the specified commit.
 // It returns the path to the worktree, a cleanup function to remove it, and an error if it fails.
-func (c *Client) CreateWorktree(ctx context.Context, commit string) (string, func(), error) {
+func (c *Client) CreateWorktree(ctx context.Context, commit string) (dir string, cleanup func(), err error) {
 	worktree, err := os.MkdirTemp(c.worktreeBaseDir, "worktree-*")
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create temp dir for worktree: %w", err)
 	}
 
-	if err := c.addWorktree(ctx, worktree, commit); err != nil {
+	if err = c.addWorktree(ctx, worktree, commit); err != nil {
 		_ = os.RemoveAll(worktree)
 		return "", nil, err
 	}
 
-	cleanup := func() {
+	cleanup = func() {
 		cleanupCtx := context.WithoutCancel(ctx)
 		c.removeWorktree(cleanupCtx, worktree)
 		_ = os.RemoveAll(worktree)
