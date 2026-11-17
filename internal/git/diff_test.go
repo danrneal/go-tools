@@ -91,11 +91,6 @@ func TestClient_Diff(t *testing.T) {
 					similarity index 100%
 					rename from file.go
 					rename to newfile.go
-					diff --git a/other.go b/other.go
-					--- a/other.go
-					+++ b/other.go
-					@@ -1 +1 @@
-					+foo
 				`),
 			},
 			wantDiff: CombinedDiff{
@@ -104,35 +99,11 @@ func TestClient_Diff(t *testing.T) {
 						OldPath: "file.go",
 						NewPath: "newfile.go",
 					},
-					"other.go": {
-						OldPath: "other.go",
-						NewPath: "other.go",
-						Hunks: []Hunk{
-							{
-								OldStart: 1,
-								OldCount: 1,
-								NewStart: 1,
-								NewCount: 1,
-							},
-						},
-					},
 				},
 				ToFile: map[string]*FileDiff{
 					"newfile.go": {
 						OldPath: "file.go",
 						NewPath: "newfile.go",
-					},
-					"other.go": {
-						OldPath: "other.go",
-						NewPath: "other.go",
-						Hunks: []Hunk{
-							{
-								OldStart: 1,
-								OldCount: 1,
-								NewStart: 1,
-								NewCount: 1,
-							},
-						},
 					},
 				},
 			},

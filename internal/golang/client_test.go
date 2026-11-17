@@ -130,6 +130,15 @@ func TestClient_GenerateCoverProfile(t *testing.T) {
 			wantErr: ErrNoCoverage,
 		},
 		{
+			name: "tests passed but profile missing",
+			runMock: &runMock{
+				wantArgs: []string{"test", "-coverprofile=coverage.out", "./..."},
+				out:      "?   \tgithub.com/example/repo\t[no test files]\n",
+				err:      nil,
+			},
+			wantErr: ErrNoCoverage,
+		},
+		{
 			name: "tests passed but profile is empty",
 			runMock: &runMock{
 				wantArgs:      []string{"test", "-coverprofile=coverage.out", "./..."},
