@@ -72,14 +72,18 @@ func (c *Client) ModulePath(ctx context.Context) (string, error) {
 
 // GenerateCoverProfile executes the test suite to generate a coverage profile.
 // It returns the path to the profile, ignoring standard test failures, or wraps
-// ErrNoCoverage if the profile is missing or empty.
+// ErrNoCoverage (along with any test execution error) if the profile is missing or empty.
 func (c *Client) GenerateCoverProfile(ctx context.Context) (string, error) {
 	out, testErr := c.run(ctx, "test", "-coverprofile=coverage.out", "./...")
 
 	coverProfile := filepath.Join(c.dir, "coverage.out")
 	stat, err := os.Stat(coverProfile)
 	if err != nil || stat.Size() == 0 {
-		return "", fmt.Errorf("%w\nTest Exit Status: %w\nTest Output:\n%s", ErrNoCoverage, testErr, string(out))
+		if testErr != nil {
+			return "", fmt.Errorf("%w\nTest Output:\n%s\nTest Exit Status: %w", ErrNoCoverage, string(out), testErr)
+		}
+
+		return "", fmt.Errorf("%w\nTest Output:\n%s", ErrNoCoverage, string(out))
 	}
 
 	return coverProfile, nil
