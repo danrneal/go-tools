@@ -53,7 +53,7 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-func TestClient_ModulePath(t *testing.T) {
+func TestModulePath(t *testing.T) {
 	t.Parallel()
 
 	errMockRun := errors.New("go command failed")
@@ -103,7 +103,7 @@ func TestClient_ModulePath(t *testing.T) {
 	}
 }
 
-func TestClient_GenerateCoverProfile(t *testing.T) {
+func TestGenerateCoverProfile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {

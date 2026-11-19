@@ -381,7 +381,7 @@ func TestIgnoreFile_Write(t *testing.T) {
 	}
 }
 
-func Test_compareMutation(t *testing.T) {
+func TestCompareMutation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {

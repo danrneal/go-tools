@@ -125,7 +125,7 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestFiles_Regressions(t *testing.T) {
+func TestRegressions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -313,7 +313,7 @@ func TestFiles_Regressions(t *testing.T) {
 	}
 }
 
-func TestFiles_UncoveredAdditions(t *testing.T) {
+func TestUncoveredAdditions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -503,7 +503,7 @@ func TestFiles_UncoveredAdditions(t *testing.T) {
 	}
 }
 
-func TestFiles_FormatLineRanges(t *testing.T) {
+func TestFormatLineRanges(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
