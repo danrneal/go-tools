@@ -1,6 +1,6 @@
 .PHONY: all fast update lint test build coverage gomutants clean
 
-all: update lint test build coverage gomutants clean
+all: update lint test build gomutants coverage clean
 
 fast: lint test build coverage clean
 
